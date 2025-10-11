@@ -5,6 +5,7 @@
   "doctype": "DocType",
   "engine": "InnoDB",
   "editable_grid": 1,
+
   "fields": [
     {
       "fieldname": "template_item",

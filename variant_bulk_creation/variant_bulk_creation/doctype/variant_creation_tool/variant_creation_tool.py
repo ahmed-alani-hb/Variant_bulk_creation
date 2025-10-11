@@ -281,7 +281,26 @@ def create_variants(doc: Dict) -> frappe._dict:
                 variant_doc.flags.ignore_permissions = True
                 variant_doc.save()
 
-            created_name = variant_doc.name
+            created_name = (
+                variant_doc.name
+                or variant_doc.get("name")
+                or variant_doc.get("item_code")
+                or get_variant(template_item, args)
+            )
+
+            if not created_name:
+                log.append(
+                    _format_result(
+                        _(
+                            "Created variant for {0} on template {1}, but could not determine the new item code."
+                        ).format(
+                            frappe.bold(attribute_value),
+                            frappe.bold(template_label),
+                        )
+                    )
+                )
+                continue
+
             created.append(created_name)
             log.append(
                 _format_result(

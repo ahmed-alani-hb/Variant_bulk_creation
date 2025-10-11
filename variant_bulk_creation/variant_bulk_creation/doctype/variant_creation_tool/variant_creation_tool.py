@@ -67,6 +67,7 @@ def _get_template_context(template_item: str) -> frappe._dict:
 class VariantCreationTool(Document):
     """Client side orchestrates the tool; server logic lives in helpers below."""
 
+    @frappe.whitelist()
     def create_variants(self):
         """DocType method invoked from the client button to create variants."""
 

@@ -268,6 +268,14 @@ def create_variants(doc: Dict) -> frappe._dict:
                 rename_doc("Item", variant_doc.name, row_dict.item_code, force=True)
                 variant_doc = frappe.get_doc("Item", row_dict.item_code)
 
+            # ``create_variant`` should insert the record, but if a custom app or
+            # hook short-circuited the insertion the returned document might not
+            # exist yet. Guard against that so the user actually gets the item.
+            if not frappe.db.exists("Item", variant_doc.name):
+                variant_doc.flags.ignore_permissions = True
+                variant_doc.insert()
+                variant_doc.reload()
+
             updates = {}
             if row_dict.item_name:
                 updates["item_name"] = row_dict.item_name

@@ -18,3 +18,13 @@ doc_events = {
         "validate": "variant_bulk_creation.variant_bulk_creation.sales_order.ensure_sales_order_variants",
     }
 }
+
+fixtures = [
+    {
+        "dt": "Custom Field",
+        "filters": [["name", "in", [
+            "Sales Order Item-template_item",
+            "Sales Order Item-attribute_value",
+        ]]],
+    }
+]

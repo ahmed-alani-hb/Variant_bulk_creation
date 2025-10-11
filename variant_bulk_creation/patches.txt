@@ -1,2 +1,1 @@
 variant_bulk_creation.variant_bulk_creation.variant_bulk_creation
-variant_bulk_creation.patches.add_sales_order_item_fields

@@ -51,3 +51,8 @@ values, the system automatically locates (or creates) the corresponding variant
 and fills in the Item Code, description, and UOM on the row. This keeps order
 entry fast while guaranteeing that every requested configuration exists in the
 item master.
+
+These fields ship as fixtures so they install automatically on new sites. For
+existing deployments, run `bench --site your-site migrate` (or reload fixtures)
+after updating the app to ensure the fields appear on the Sales Order Item
+table.

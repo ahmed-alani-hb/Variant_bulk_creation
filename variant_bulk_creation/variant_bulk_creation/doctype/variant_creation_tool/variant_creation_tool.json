@@ -38,6 +38,7 @@
       "label": "Variants"
     },
     {
+      "allow_bulk_edit": 1,
       "fieldname": "variants",
       "fieldtype": "Table",
       "label": "Variants to Create",

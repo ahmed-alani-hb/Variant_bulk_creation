@@ -1,0 +1,6 @@
+include README.md
+include requirements.txt
+recursive-include variant_bulk_creation *.py
+recursive-include variant_bulk_creation *.json
+recursive-include variant_bulk_creation *.js
+include variant_bulk_creation/modules.txt

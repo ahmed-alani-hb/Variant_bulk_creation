@@ -54,7 +54,7 @@ frappe.ui.form.on('Variant Creation Tool', {
         }
 
         frappe.call({
-            method: 'variant_bulk_creation.variant_bulk_creation.doctype.variant_creation_tool.variant_creation_tool.fetch_template_details',
+            method: 'variant_bulk_creation.variant_bulk_creation.variant_bulk_creation.doctype.variant_creation_tool.variant_creation_tool.fetch_template_details',
             args: {
                 template_item: frm.doc.template_item
             },

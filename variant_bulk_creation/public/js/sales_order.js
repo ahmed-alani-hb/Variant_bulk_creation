@@ -76,7 +76,13 @@ function applyVariantDetails(cdt, cdn, data) {
 
 function ensureVariantForRow(frm, cdt, cdn) {
     const row = locals[cdt][cdn] || {};
-    if (!row.template_item || !row.attribute_value) {
+    if (!row.template_item) {
+        return;
+    }
+
+    // Check if we have any attribute values to work with
+    const hasAnyAttribute = row.attribute_value || row.sticker || row.powder_code;
+    if (!hasAnyAttribute) {
         return;
     }
 
@@ -86,7 +92,9 @@ function ensureVariantForRow(frm, cdt, cdn) {
                 method: SALES_ORDER_RESOLVE_VARIANT,
                 args: {
                     template_item: row.template_item,
-                    attribute_value: row.attribute_value,
+                    attribute_value: row.attribute_value || null,
+                    sticker: row.sticker || null,
+                    powder_code: row.powder_code || null,
                 },
                 freeze: false,
             })
@@ -162,6 +170,8 @@ frappe.ui.form.on('Sales Order Item', {
         if (!row.template_item) {
             frappe.model.set_value(cdt, cdn, {
                 attribute_value: null,
+                sticker: null,
+                powder_code: null,
             });
             clearVariantSelection(cdt, cdn);
             return;
@@ -170,9 +180,11 @@ frappe.ui.form.on('Sales Order Item', {
         const cache = getVariantCache(frm);
         cache[row.template_item] = cache[row.template_item] || {};
 
-        if (row.attribute_value) {
+        if (row.attribute_value || row.sticker || row.powder_code) {
             frappe.model.set_value(cdt, cdn, {
                 attribute_value: null,
+                sticker: null,
+                powder_code: null,
             });
         }
 
@@ -183,6 +195,24 @@ frappe.ui.form.on('Sales Order Item', {
     attribute_value(frm, cdt, cdn) {
         const row = locals[cdt][cdn] || {};
         if (!row.attribute_value) {
+            clearVariantSelection(cdt, cdn);
+            return;
+        }
+
+        ensureVariantForRow(frm, cdt, cdn);
+    },
+    sticker(frm, cdt, cdn) {
+        const row = locals[cdt][cdn] || {};
+        if (!row.sticker) {
+            clearVariantSelection(cdt, cdn);
+            return;
+        }
+
+        ensureVariantForRow(frm, cdt, cdn);
+    },
+    powder_code(frm, cdt, cdn) {
+        const row = locals[cdt][cdn] || {};
+        if (!row.powder_code) {
             clearVariantSelection(cdt, cdn);
             return;
         }

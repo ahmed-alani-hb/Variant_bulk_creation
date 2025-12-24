@@ -9,5 +9,22 @@ app_license = "MIT"
 
 """Default hook configuration for the Variant Bulk Creation app."""
 
-# This lightweight app only adds client/server logic that lives on the Variant
-# Creation Tool DocType. No additional hooks are required.
+doctype_js = {
+    "Sales Order": "public/js/sales_order.js",
+}
+
+doc_events = {
+    "Sales Order": {
+        "validate": "variant_bulk_creation.variant_bulk_creation.sales_order.ensure_sales_order_variants",
+    }
+}
+
+fixtures = [
+    {
+        "dt": "Custom Field",
+        "filters": [["name", "in", [
+            "Sales Order Item-template_item",
+            "Sales Order Item-attribute_value",
+        ]]],
+    }
+]

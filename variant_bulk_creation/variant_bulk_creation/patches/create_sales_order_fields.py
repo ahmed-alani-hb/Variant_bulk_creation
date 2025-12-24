@@ -12,35 +12,11 @@ def execute():
     fields = {
         "Sales Order Item": [
             {
-                "fieldname": "vbc_profile",
-                "label": "Profile (Template Item)",
+                "fieldname": "vbc_template_item",
+                "label": "Template Profile",
                 "fieldtype": "Link",
                 "options": "Item",
                 "insert_after": "item_code",
-                "in_list_view": 1,
-            },
-            {
-                "fieldname": "vbc_attribute_value_1",
-                "label": "Attribute Value 1",
-                "fieldtype": "Link",
-                "options": "Item Attribute Value",
-                "insert_after": "vbc_profile",
-                "in_list_view": 1,
-            },
-            {
-                "fieldname": "vbc_attribute_value_2",
-                "label": "Attribute Value 2",
-                "fieldtype": "Link",
-                "options": "Item Attribute Value",
-                "insert_after": "vbc_attribute_value_1",
-                "in_list_view": 1,
-            },
-            {
-                "fieldname": "vbc_attribute_value_3",
-                "label": "Attribute Value 3",
-                "fieldtype": "Link",
-                "options": "Item Attribute Value",
-                "insert_after": "vbc_attribute_value_2",
                 "in_list_view": 1,
             },
             {
@@ -48,7 +24,7 @@ def execute():
                 "label": "Powder Coat",
                 "fieldtype": "Link",
                 "options": "Item Attribute Value",
-                "insert_after": "vbc_attribute_value_3",
+                "insert_after": "vbc_template_item",
                 "in_list_view": 1,
             },
             {
@@ -61,7 +37,7 @@ def execute():
             },
             {
                 "fieldname": "vbc_length",
-                "label": "Length",
+                "label": "Length (Numeric)",
                 "fieldtype": "Float",
                 "insert_after": "vbc_sticker",
                 "in_list_view": 1,

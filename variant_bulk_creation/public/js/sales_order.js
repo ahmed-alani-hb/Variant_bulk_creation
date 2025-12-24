@@ -25,6 +25,7 @@ const VBC_FIELD_MAP = {
     length: 'vbc_length'
 };
 
+const VBC_LINK_ATTRIBUTE_FIELDS = ['vbc_powder_code', 'vbc_sticker'];
 const VBC_ATTRIBUTE_FIELDS = ['vbc_powder_code', 'vbc_sticker', 'vbc_length'];
 
 function vbcClearAttributeFields(row) {
@@ -32,7 +33,7 @@ function vbcClearAttributeFields(row) {
 }
 
 function vbcTemplateFromRow(row) {
-    return row.vbc_profile || row.item_code || null;
+    return row.vbc_template_item || row.item_code || null;
 }
 
 function vbcMatchFieldForAttribute(attribute) {
@@ -55,7 +56,7 @@ function vbcMatchFieldForAttribute(attribute) {
 }
 
 function vbcSetAttributeQueries(frm) {
-    VBC_ATTRIBUTE_FIELDS.forEach((fieldname) => {
+    VBC_LINK_ATTRIBUTE_FIELDS.forEach((fieldname) => {
         frm.set_query(fieldname, 'items', (doc, cdt, cdn) => {
             const row = locals[cdt][cdn];
             if (!row) {
@@ -151,7 +152,7 @@ function vbcMaybeCreateVariant(frm, cdt, cdn) {
 frappe.ui.form.on('Sales Order', {
     setup(frm) {
         vbcSetAttributeQueries(frm);
-        frm.set_query('vbc_profile', 'items', () => ({
+        frm.set_query('vbc_template_item', 'items', () => ({
             filters: {
                 has_variants: 1,
                 variant_of: ['=', '']
@@ -183,7 +184,7 @@ frappe.ui.form.on('Sales Order Item', {
         });
     },
 
-    vbc_profile(frm, cdt, cdn) {
+    vbc_template_item(frm, cdt, cdn) {
         const row = locals[cdt][cdn];
         if (!row) {
             return;
@@ -191,16 +192,16 @@ frappe.ui.form.on('Sales Order Item', {
 
         vbcClearAttributeFields(row);
 
-        if (!row.vbc_profile) {
+        if (!row.vbc_template_item) {
             return;
         }
 
-        vbcFetchAttributes(frm, row.vbc_profile).then((response) => {
+        vbcFetchAttributes(frm, row.vbc_template_item).then((response) => {
             if (!response.message) {
                 return;
             }
 
-            vbcCacheTemplateAttributes(frm, row.vbc_profile, response.message.attributes || []);
+            vbcCacheTemplateAttributes(frm, row.vbc_template_item, response.message.attributes || []);
             vbcSetAttributeQueries(frm);
         });
     },

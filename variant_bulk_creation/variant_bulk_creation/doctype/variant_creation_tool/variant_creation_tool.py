@@ -326,8 +326,8 @@ def create_variant_for_sales_attributes(template_item: str, attributes: Dict[str
             continue
         if attribute.get("numeric"):
             try:
-                value = float(value)
-            except (TypeError, ValueError):
+                value = str(Decimal(str(value)).normalize())
+            except (TypeError, ValueError, InvalidOperation):
                 frappe.throw(
                     _("Attribute {0} requires a numeric value.").format(
                         frappe.bold(attribute.get("name"))

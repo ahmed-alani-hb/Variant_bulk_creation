@@ -55,17 +55,23 @@ def _materialise_variant(
 ):
     """Return an Item document for the requested variant, creating it if needed."""
 
+    # Require all three attributes to be provided
+    if not all([attribute_value, sticker, powder_code]):
+        frappe.throw(
+            _("All attributes (Main Attribute, Sticker, and Powder Code) must be provided for template {0}.").format(
+                frappe.bold(template_item)
+            )
+        )
+
     template_attributes = _get_template_attributes(template_item)
 
     # Build args dict with all provided attribute values
     args = {}
 
-    # Map our field names to the actual attribute names from the template
-    field_mapping = {
-        'attribute_value': attribute_value,
-        'sticker': sticker,
-        'powder_code': powder_code,
-    }
+    # Track which attributes we've matched
+    matched_sticker = False
+    matched_powder = False
+    matched_main = False
 
     # Match provided values with template attributes
     for attr_name, attr_data in template_attributes.items():
@@ -80,6 +86,7 @@ def _materialise_variant(
                     )
                 )
             args[attr_name] = sticker
+            matched_sticker = True
         elif 'powder' in attr_lower and powder_code:
             if powder_code not in attr_data['values']:
                 frappe.throw(
@@ -88,15 +95,27 @@ def _materialise_variant(
                     )
                 )
             args[attr_name] = powder_code
+            matched_powder = True
         elif attribute_value:
             # This is the main variant attribute
             if attribute_value in attr_data['values']:
                 args[attr_name] = attribute_value
+                matched_main = True
 
-    if not args:
+    # Verify all three attributes were matched
+    if not all([matched_sticker, matched_powder, matched_main]):
+        missing = []
+        if not matched_sticker:
+            missing.append("Sticker")
+        if not matched_powder:
+            missing.append("Powder Code")
+        if not matched_main:
+            missing.append("Main Attribute")
+
         frappe.throw(
-            _("At least one attribute value must be provided for template {0}.").format(
-                frappe.bold(template_item)
+            _("Template {0} is missing required attributes: {1}").format(
+                frappe.bold(template_item),
+                ", ".join(missing)
             )
         )
 
@@ -129,8 +148,8 @@ def ensure_sales_order_variants(doc, _event: Optional[str] = None) -> None:
         if not template_item:
             continue
 
-        # Skip if no attributes are provided
-        if not any([attribute_value, sticker, powder_code]):
+        # Skip if ALL attributes are not provided (require all three)
+        if not all([attribute_value, sticker, powder_code]):
             continue
 
         try:

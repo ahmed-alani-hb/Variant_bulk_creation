@@ -80,9 +80,10 @@ function ensureVariantForRow(frm, cdt, cdn) {
         return;
     }
 
-    // Check if we have any attribute values to work with
-    const hasAnyAttribute = row.attribute_value || row.sticker || row.powder_code;
-    if (!hasAnyAttribute) {
+    // Require ALL attributes to be selected before creating variant
+    // Template + Main Attribute + Sticker + Powder Code must all be present
+    const allAttributesSelected = row.attribute_value && row.sticker && row.powder_code;
+    if (!allAttributesSelected) {
         return;
     }
 
@@ -92,9 +93,9 @@ function ensureVariantForRow(frm, cdt, cdn) {
                 method: SALES_ORDER_RESOLVE_VARIANT,
                 args: {
                     template_item: row.template_item,
-                    attribute_value: row.attribute_value || null,
-                    sticker: row.sticker || null,
-                    powder_code: row.powder_code || null,
+                    attribute_value: row.attribute_value,
+                    sticker: row.sticker,
+                    powder_code: row.powder_code,
                 },
                 freeze: false,
             })

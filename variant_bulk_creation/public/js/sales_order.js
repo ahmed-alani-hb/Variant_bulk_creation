@@ -80,9 +80,9 @@ function ensureVariantForRow(frm, cdt, cdn) {
         return;
     }
 
-    // Require ALL attributes to be selected before creating variant
-    // Template + Main Attribute + Sticker + Powder Code must all be present
-    const allAttributesSelected = row.attribute_value && row.sticker && row.powder_code;
+    // Require ALL three attributes to be provided before creating variant
+    // Template + Powder Code + Length + Sticker must all be present
+    const allAttributesSelected = row.powder_code && row.length != null && row.sticker;
     if (!allAttributesSelected) {
         return;
     }
@@ -93,9 +93,9 @@ function ensureVariantForRow(frm, cdt, cdn) {
                 method: SALES_ORDER_RESOLVE_VARIANT,
                 args: {
                     template_item: row.template_item,
-                    attribute_value: row.attribute_value,
-                    sticker: row.sticker,
                     powder_code: row.powder_code,
+                    length: row.length,
+                    sticker: row.sticker,
                 },
                 freeze: false,
             })
@@ -170,9 +170,9 @@ frappe.ui.form.on('Sales Order Item', {
 
         if (!row.template_item) {
             frappe.model.set_value(cdt, cdn, {
-                attribute_value: null,
                 sticker: null,
                 powder_code: null,
+                length: null,
             });
             clearVariantSelection(cdt, cdn);
             return;
@@ -181,11 +181,11 @@ frappe.ui.form.on('Sales Order Item', {
         const cache = getVariantCache(frm);
         cache[row.template_item] = cache[row.template_item] || {};
 
-        if (row.attribute_value || row.sticker || row.powder_code) {
+        if (row.sticker || row.powder_code || row.length != null) {
             frappe.model.set_value(cdt, cdn, {
-                attribute_value: null,
                 sticker: null,
                 powder_code: null,
+                length: null,
             });
         }
 
@@ -193,9 +193,18 @@ frappe.ui.form.on('Sales Order Item', {
 
         fetchTemplateAttribute(frm, row.template_item);
     },
-    attribute_value(frm, cdt, cdn) {
+    powder_code(frm, cdt, cdn) {
         const row = locals[cdt][cdn] || {};
-        if (!row.attribute_value) {
+        if (!row.powder_code) {
+            clearVariantSelection(cdt, cdn);
+            return;
+        }
+
+        ensureVariantForRow(frm, cdt, cdn);
+    },
+    length(frm, cdt, cdn) {
+        const row = locals[cdt][cdn] || {};
+        if (row.length == null) {
             clearVariantSelection(cdt, cdn);
             return;
         }
@@ -205,15 +214,6 @@ frappe.ui.form.on('Sales Order Item', {
     sticker(frm, cdt, cdn) {
         const row = locals[cdt][cdn] || {};
         if (!row.sticker) {
-            clearVariantSelection(cdt, cdn);
-            return;
-        }
-
-        ensureVariantForRow(frm, cdt, cdn);
-    },
-    powder_code(frm, cdt, cdn) {
-        const row = locals[cdt][cdn] || {};
-        if (!row.powder_code) {
             clearVariantSelection(cdt, cdn);
             return;
         }

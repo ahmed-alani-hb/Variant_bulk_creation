@@ -49,16 +49,23 @@ def _get_template_attributes(template_item: str) -> dict:
 
 def _materialise_variant(
     template_item: str,
-    attribute_value: Optional[str] = None,
     sticker: Optional[str] = None,
     powder_code: Optional[str] = None,
+    length: Optional[float] = None,
 ):
-    """Return an Item document for the requested variant, creating it if needed."""
+    """Return an Item document for the requested variant, creating it if needed.
+
+    Args:
+        template_item: The template item code
+        sticker: The sticker attribute value
+        powder_code: The powder code attribute value
+        length: The numeric length value (for numeric attributes)
+    """
 
     # Require all three attributes to be provided
-    if not all([attribute_value, sticker, powder_code]):
+    if not all([sticker, powder_code, length is not None]):
         frappe.throw(
-            _("All attributes (Main Attribute, Sticker, and Powder Code) must be provided for template {0}.").format(
+            _("All attributes (Powder Code, Length, and Sticker) must be provided for template {0}.").format(
                 frappe.bold(template_item)
             )
         )
@@ -71,7 +78,7 @@ def _materialise_variant(
     # Track which attributes we've matched
     matched_sticker = False
     matched_powder = False
-    matched_main = False
+    matched_length = False
 
     # Match provided values with template attributes
     for attr_name, attr_data in template_attributes.items():
@@ -96,21 +103,20 @@ def _materialise_variant(
                 )
             args[attr_name] = powder_code
             matched_powder = True
-        elif attribute_value:
-            # This is the main variant attribute
-            if attribute_value in attr_data['values']:
-                args[attr_name] = attribute_value
-                matched_main = True
+        elif 'length' in attr_lower and length is not None:
+            # Length is a numeric attribute - pass the number directly
+            args[attr_name] = length
+            matched_length = True
 
     # Verify all three attributes were matched
-    if not all([matched_sticker, matched_powder, matched_main]):
+    if not all([matched_sticker, matched_powder, matched_length]):
         missing = []
         if not matched_sticker:
             missing.append("Sticker")
         if not matched_powder:
             missing.append("Powder Code")
-        if not matched_main:
-            missing.append("Main Attribute")
+        if not matched_length:
+            missing.append("Length")
 
         frappe.throw(
             _("Template {0} is missing required attributes: {1}").format(
@@ -140,24 +146,24 @@ def ensure_sales_order_variants(doc, _event: Optional[str] = None) -> None:
 
     for row in doc.get("items", []):
         template_item = row.get("template_item")
-        attribute_value = row.get("attribute_value")
         sticker = row.get("sticker")
         powder_code = row.get("powder_code")
+        length = row.get("length")
 
         # Skip if no template selected
         if not template_item:
             continue
 
         # Skip if ALL attributes are not provided (require all three)
-        if not all([attribute_value, sticker, powder_code]):
+        if not all([sticker, powder_code, length is not None]):
             continue
 
         try:
             variant_doc = _materialise_variant(
                 template_item=template_item,
-                attribute_value=attribute_value,
                 sticker=sticker,
                 powder_code=powder_code,
+                length=length,
             )
         except Exception:
             frappe.log_error(
@@ -204,17 +210,17 @@ def get_template_attribute(template_item: str) -> dict:
 @frappe.whitelist()
 def resolve_sales_order_variant(
     template_item: str,
-    attribute_value: Optional[str] = None,
     sticker: Optional[str] = None,
     powder_code: Optional[str] = None,
+    length: Optional[float] = None,
 ) -> dict[str, Optional[str]]:
     """Return the resolved variant details for client-side population."""
 
     variant_doc = _materialise_variant(
         template_item=template_item,
-        attribute_value=attribute_value,
         sticker=sticker,
         powder_code=powder_code,
+        length=length,
     )
 
     return {

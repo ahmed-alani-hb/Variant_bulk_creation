@@ -32,10 +32,16 @@ entering the attribute values that should become variants.
 
 ## Sales Order integration
 
-The app also injects three attribute columns on the Sales Order Item table
-(Attribute Value 1–3). When you select a template Item in a row and fill the
-attribute value columns, the app will create (or reuse) the matching variant and
-swap the row's Item Code to that variant automatically.
+The app injects dedicated columns on the Sales Order Item table:
+
+- **Profile (Template Item)** to choose the template.
+- **Powder Coat** and **Sticker** for selecting attribute values.
+- **Length** for entering numeric attributes configured with From/To/Increment on
+  the Item Attribute.
+
+When you select a template in **Profile** and fill the attribute columns, the app
+will create (or reuse) the matching variant and swap the row's Item Code to that
+variant automatically.
 
 ### Validation rules
 

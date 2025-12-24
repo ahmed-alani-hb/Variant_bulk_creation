@@ -19,24 +19,60 @@ function vbcGetTemplateAttributes(frm, template) {
     return frm._vbc_template_cache[template] || null;
 }
 
-function vbcAttributeFieldnames() {
-    return ['vbc_attribute_value_1', 'vbc_attribute_value_2', 'vbc_attribute_value_3'];
-}
+const VBC_FIELD_MAP = {
+    powder: 'vbc_powder_code',
+    sticker: 'vbc_sticker',
+    length: 'vbc_length'
+};
+
+const VBC_ATTRIBUTE_FIELDS = ['vbc_powder_code', 'vbc_sticker', 'vbc_length'];
 
 function vbcClearAttributeFields(row) {
-    vbcAttributeFieldnames().forEach((field) => frappe.model.set_value(row.doctype, row.name, field, null));
+    VBC_ATTRIBUTE_FIELDS.forEach((field) => frappe.model.set_value(row.doctype, row.name, field, null));
+}
+
+function vbcTemplateFromRow(row) {
+    return row.vbc_profile || row.item_code || null;
+}
+
+function vbcMatchFieldForAttribute(attribute) {
+    if (!attribute || !attribute.name) {
+        return null;
+    }
+
+    const name = attribute.name.toLowerCase();
+    if (name.includes('powder')) {
+        return VBC_FIELD_MAP.powder;
+    }
+    if (name.includes('sticker')) {
+        return VBC_FIELD_MAP.sticker;
+    }
+    if (name.includes('length')) {
+        return VBC_FIELD_MAP.length;
+    }
+
+    return null;
 }
 
 function vbcSetAttributeQueries(frm) {
-    vbcAttributeFieldnames().forEach((fieldname, index) => {
+    VBC_ATTRIBUTE_FIELDS.forEach((fieldname) => {
         frm.set_query(fieldname, 'items', (doc, cdt, cdn) => {
             const row = locals[cdt][cdn];
-            if (!row || !row.item_code) {
+            if (!row) {
                 return {};
             }
 
-            const attributes = vbcGetTemplateAttributes(frm, row.item_code);
-            const attribute = attributes && attributes[index] ? attributes[index] : null;
+            const template = vbcTemplateFromRow(row);
+            if (!template) {
+                return {};
+            }
+
+            const attributes = vbcGetTemplateAttributes(frm, template);
+            if (!attributes || !attributes.length) {
+                return {};
+            }
+
+            const attribute = attributes.find((attr) => vbcMatchFieldForAttribute(attr) === fieldname);
             if (!attribute) {
                 return {};
             }
@@ -61,17 +97,24 @@ function vbcFetchAttributes(frm, template) {
 
 function vbcMaybeCreateVariant(frm, cdt, cdn) {
     const row = locals[cdt][cdn];
-    if (!row || !row.item_code) {
+    if (!row) {
         return;
     }
 
-    const attributes = vbcGetTemplateAttributes(frm, row.item_code);
+    const template = vbcTemplateFromRow(row);
+    if (!template) {
+        return;
+    }
+
+    const attributes = vbcGetTemplateAttributes(frm, template);
     if (!attributes || !attributes.length) {
         return;
     }
 
-    const fieldnames = vbcAttributeFieldnames();
-    const missing = attributes.filter((_, idx) => !row[fieldnames[idx]]);
+    const missing = attributes.filter((attribute) => {
+        const fieldname = vbcMatchFieldForAttribute(attribute);
+        return fieldname && !row[fieldname];
+    });
     if (missing.length) {
         return;
     }
@@ -79,11 +122,11 @@ function vbcMaybeCreateVariant(frm, cdt, cdn) {
     frappe.call({
         method: VBC_CREATE_VARIANT_METHOD,
         args: {
-            template_item: row.item_code,
+            template_item: template,
             attributes: {
-                vbc_attribute_value_1: row.vbc_attribute_value_1,
-                vbc_attribute_value_2: row.vbc_attribute_value_2,
-                vbc_attribute_value_3: row.vbc_attribute_value_3
+                vbc_powder_code: row.vbc_powder_code,
+                vbc_sticker: row.vbc_sticker,
+                vbc_length: row.vbc_length
             }
         },
         freeze: true,
@@ -108,6 +151,12 @@ function vbcMaybeCreateVariant(frm, cdt, cdn) {
 frappe.ui.form.on('Sales Order', {
     setup(frm) {
         vbcSetAttributeQueries(frm);
+        frm.set_query('vbc_profile', 'items', () => ({
+            filters: {
+                has_variants: 1,
+                variant_of: ['=', '']
+            }
+        }));
     }
 });
 
@@ -134,15 +183,37 @@ frappe.ui.form.on('Sales Order Item', {
         });
     },
 
-    vbc_attribute_value_1(frm, cdt, cdn) {
+    vbc_profile(frm, cdt, cdn) {
+        const row = locals[cdt][cdn];
+        if (!row) {
+            return;
+        }
+
+        vbcClearAttributeFields(row);
+
+        if (!row.vbc_profile) {
+            return;
+        }
+
+        vbcFetchAttributes(frm, row.vbc_profile).then((response) => {
+            if (!response.message) {
+                return;
+            }
+
+            vbcCacheTemplateAttributes(frm, row.vbc_profile, response.message.attributes || []);
+            vbcSetAttributeQueries(frm);
+        });
+    },
+
+    vbc_powder_code(frm, cdt, cdn) {
         vbcMaybeCreateVariant(frm, cdt, cdn);
     },
 
-    vbc_attribute_value_2(frm, cdt, cdn) {
+    vbc_sticker(frm, cdt, cdn) {
         vbcMaybeCreateVariant(frm, cdt, cdn);
     },
 
-    vbc_attribute_value_3(frm, cdt, cdn) {
+    vbc_length(frm, cdt, cdn) {
         vbcMaybeCreateVariant(frm, cdt, cdn);
     }
 });

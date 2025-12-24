@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Sequence
 
 import frappe
@@ -16,6 +17,36 @@ except ImportError as exc:  # pragma: no cover - ERPNext not available in tests
     raise ImportError(
         "Variant Creation Tool requires ERPNext to be installed to create item variants."
     ) from exc
+
+
+def _generate_numeric_values(attribute_doc) -> List[str]:
+    """Generate numeric attribute values using range and increment."""
+
+    try:
+        start = Decimal(str(attribute_doc.from_range))
+        end = Decimal(str(attribute_doc.to_range))
+        step = Decimal(str(attribute_doc.increment))
+    except (InvalidOperation, TypeError):
+        frappe.throw(
+            _("Numeric attribute {0} is missing range or increment configuration.").format(
+                frappe.bold(attribute_doc.attribute_name or attribute_doc.name)
+            )
+        )
+
+    if step <= 0:
+        frappe.throw(
+            _("Numeric attribute {0} must have an increment greater than zero.").format(
+                frappe.bold(attribute_doc.attribute_name or attribute_doc.name)
+            )
+        )
+
+    values: List[str] = []
+    current = start
+    while current <= end:
+        values.append(str(current.normalize()))
+        current += step
+
+    return values
 
 
 def _get_template_context(template_item: str) -> frappe._dict:
@@ -49,23 +80,33 @@ def _get_template_context(template_item: str) -> frappe._dict:
     attribute_contexts: List[Dict[str, Any]] = []
     for attribute in attributes:
         attribute_name = attribute.attribute
-        allowed_values = frappe.get_all(
-            "Item Attribute Value",
-            filters={"parent": attribute_name},
-            fields=["attribute_value", "abbr"],
-            order_by="idx asc",
-        )
-        if not allowed_values:
-            frappe.throw(
-                _("Item Attribute {0} does not have any values configured.").format(
-                    frappe.bold(attribute_name)
-                )
+        attribute_doc = frappe.get_doc("Item Attribute", attribute_name)
+        numeric_values = bool(attribute_doc.numeric_values)
+
+        if numeric_values:
+            generated_values = _generate_numeric_values(attribute_doc)
+            allowed_values = [
+                {"attribute_value": value, "abbr": value} for value in generated_values
+            ]
+        else:
+            allowed_values = frappe.get_all(
+                "Item Attribute Value",
+                filters={"parent": attribute_name},
+                fields=["attribute_value", "abbr"],
+                order_by="idx asc",
             )
+            if not allowed_values:
+                frappe.throw(
+                    _("Item Attribute {0} does not have any values configured.").format(
+                        frappe.bold(attribute_name)
+                    )
+                )
 
         attribute_contexts.append(
             {
                 "name": attribute_name,
                 "values": allowed_values,
+                "numeric": numeric_values,
             }
         )
 
@@ -131,6 +172,17 @@ def search_attribute_values(
     if not attribute:
         return []
 
+    attribute_doc = frappe.get_doc("Item Attribute", attribute)
+    numeric_values = bool(attribute_doc.numeric_values)
+
+    if numeric_values:
+        values = _generate_numeric_values(attribute_doc)
+        filtered = [
+            value for value in values if not txt or txt.lower() in str(value).lower()
+        ]
+        sliced = filtered[start : start + page_len]
+        return [[value, value] for value in sliced]
+
     like_pattern = f"%{txt or ''}%"
 
     rows = frappe.db.sql(
@@ -190,7 +242,7 @@ def _validate_rows(
         for attr_index, attribute in enumerate(attributes):
             allowed_values = attribute.get("values") or []
             allowed = {
-                value.get("attribute_value")
+                str(value.get("attribute_value"))
                 for value in allowed_values
                 if value.get("attribute_value")
             }
@@ -202,7 +254,7 @@ def _validate_rows(
                 missing_attribute_rows.append(f"{idx + 1} ({attribute.get('name')})")
                 continue
 
-            if attribute_value not in allowed:
+            if str(attribute_value) not in allowed:
                 invalid_values.append(
                     (idx + 1, attribute_value, template_item, attribute.get("name") or _("Unknown"))
                 )
@@ -254,16 +306,33 @@ def create_variant_for_sales_attributes(template_item: str, attributes: Dict[str
     )
     context = _get_template_context(template_item)
     attribute_defs = context.get("attributes") or []
-    fieldnames = ["vbc_attribute_value_1", "vbc_attribute_value_2", "vbc_attribute_value_3"]
+    field_map = {
+        "powder": "vbc_powder_code",
+        "sticker": "vbc_sticker",
+        "length": "vbc_length",
+    }
 
     args: Dict[str, Any] = {}
     missing: List[str] = []
     for idx, attribute in enumerate(attribute_defs):
-        fieldname = fieldnames[idx]
+        attr_name = attribute.get("name") or ""
+        attr_key = attr_name.lower()
+        matched_field = next((field for key, field in field_map.items() if key in attr_key), None)
+        fieldname = matched_field or attr_name
+
         value = parsed_attributes.get(fieldname)
         if not value:
             missing.append(attribute.get("name"))
             continue
+        if attribute.get("numeric"):
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                frappe.throw(
+                    _("Attribute {0} requires a numeric value.").format(
+                        frappe.bold(attribute.get("name"))
+                    )
+                )
         args[attribute.get("name")] = value
 
     if missing:

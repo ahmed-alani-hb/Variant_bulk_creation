@@ -24,6 +24,20 @@
       "reqd": 1
     },
     {
+      "fieldname": "attribute_value_2",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Attribute Value 2",
+      "options": "Item Attribute Value"
+    },
+    {
+      "fieldname": "attribute_value_3",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Attribute Value 3",
+      "options": "Item Attribute Value"
+    },
+    {
       "fieldname": "item_code",
       "fieldtype": "Data",
       "in_list_view": 1,
@@ -39,18 +53,6 @@
       "fieldname": "variant_sku",
       "fieldtype": "Data",
       "label": "SKU"
-    },
-    {
-      "fieldname": "sticker",
-      "fieldtype": "Data",
-      "in_list_view": 1,
-      "label": "Sticker"
-    },
-    {
-      "fieldname": "length",
-      "fieldtype": "Float",
-      "in_list_view": 1,
-      "label": "Length"
     },
     {
       "fieldname": "description",

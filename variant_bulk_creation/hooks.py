@@ -9,5 +9,7 @@ app_license = "MIT"
 
 """Default hook configuration for the Variant Bulk Creation app."""
 
-# This lightweight app only adds client/server logic that lives on the Variant
-# Creation Tool DocType. No additional hooks are required.
+# Client-side helpers for Sales Orders to create variants directly from item rows.
+doctype_js = {
+    "Sales Order": "public/js/sales_order.js",
+}

@@ -246,6 +246,59 @@ def _format_attribute_summary(attributes: Sequence[Dict[str, Any]]) -> str:
 
 
 @frappe.whitelist()
+def create_variant_for_sales_attributes(template_item: str, attributes: Dict[str, Any]):
+    """Create (or fetch) an item variant from Sales Order row attribute selections."""
+
+    parsed_attributes = (
+        frappe.parse_json(attributes) if isinstance(attributes, str) else attributes or {}
+    )
+    context = _get_template_context(template_item)
+    attribute_defs = context.get("attributes") or []
+    fieldnames = ["vbc_attribute_value_1", "vbc_attribute_value_2", "vbc_attribute_value_3"]
+
+    args: Dict[str, Any] = {}
+    missing: List[str] = []
+    for idx, attribute in enumerate(attribute_defs):
+        fieldname = fieldnames[idx]
+        value = parsed_attributes.get(fieldname)
+        if not value:
+            missing.append(attribute.get("name"))
+            continue
+        args[attribute.get("name")] = value
+
+    if missing:
+        frappe.throw(_("Attribute values are required for: {0}").format(", ".join(missing)))
+
+    existing = get_variant(template_item, args)
+    if existing:
+        item_doc = frappe.get_doc("Item", existing)
+        return frappe._dict(
+            {
+                "item_code": item_doc.name,
+                "item_name": item_doc.item_name,
+                "description": item_doc.description,
+            }
+        )
+
+    variant_doc = create_variant(template_item, args)
+    if isinstance(variant_doc, str):
+        variant_doc = frappe.get_doc("Item", variant_doc)
+
+    if not frappe.db.exists("Item", variant_doc.name):
+        variant_doc.flags.ignore_permissions = True
+        variant_doc.insert()
+        variant_doc.reload()
+
+    return frappe._dict(
+        {
+            "item_code": variant_doc.name,
+            "item_name": variant_doc.item_name,
+            "description": variant_doc.description,
+        }
+    )
+
+
+@frappe.whitelist()
 def create_variants(doc: Dict) -> frappe._dict:
     """Create item variants for the rows included in the form."""
 

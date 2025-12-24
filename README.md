@@ -30,6 +30,13 @@ entering the attribute values that should become variants.
    row, prevents duplicates, creates the missing variants, and reports the
    outcome in the Creation Log field.
 
+## Sales Order integration
+
+The app also injects three attribute columns on the Sales Order Item table
+(Attribute Value 1–3). When you select a template Item in a row and fill the
+attribute value columns, the app will create (or reuse) the matching variant and
+swap the row's Item Code to that variant automatically.
+
 ### Validation rules
 
 - Templates can include one to three attributes; each attribute must have defined

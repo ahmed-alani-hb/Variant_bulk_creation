@@ -27,6 +27,7 @@ fixtures = [
             "Sales Order Item-attribute_value",
             "Sales Order Item-sticker",
             "Sales Order Item-length",
+            "Sales Order Item-powder_code",
         ]]],
     }
 ]

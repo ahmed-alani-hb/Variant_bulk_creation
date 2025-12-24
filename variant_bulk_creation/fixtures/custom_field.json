@@ -55,5 +55,20 @@
     "allow_in_quick_entry": 1,
     "reqd": 0,
     "precision": "2"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Sales Order Item-powder_code",
+    "dt": "Sales Order Item",
+    "module": "Variant Bulk Creation",
+    "fieldname": "powder_code",
+    "label": "Powder Code Attribute",
+    "fieldtype": "Link",
+    "options": "Item Attribute Value",
+    "insert_after": "length",
+    "depends_on": "eval:doc.template_item",
+    "allow_in_quick_entry": 1,
+    "reqd": 0,
+    "translatable": 0
   }
 ]

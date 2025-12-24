@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 import frappe
 from frappe import _
@@ -217,6 +217,24 @@ def _format_result(message: str) -> str:
     return f"• {message}"
 
 
+def _get_optional_field_updates(
+    row_dict: frappe._dict, variant_doc: Document
+) -> Dict[str, Any]:
+    """Return optional updates for custom item attributes if the fields exist."""
+
+    updates: Dict[str, Any] = {}
+    meta = getattr(variant_doc, "meta", None)
+    for fieldname in ("sticker", "length"):
+        value = row_dict.get(fieldname)
+        if value in (None, ""):
+            continue
+
+        if meta and meta.has_field(fieldname):
+            updates[fieldname] = value
+
+    return updates
+
+
 @frappe.whitelist()
 def create_variants(doc: Dict) -> frappe._dict:
     """Create item variants for the rows included in the form."""
@@ -283,6 +301,7 @@ def create_variants(doc: Dict) -> frappe._dict:
                 updates["sku"] = row_dict.variant_sku
             if row_dict.description:
                 updates["description"] = row_dict.description
+            updates.update(_get_optional_field_updates(row_dict, variant_doc))
 
             if updates:
                 variant_doc.update(updates)

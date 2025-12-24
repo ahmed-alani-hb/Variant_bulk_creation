@@ -41,6 +41,18 @@
       "label": "SKU"
     },
     {
+      "fieldname": "sticker",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Sticker"
+    },
+    {
+      "fieldname": "length",
+      "fieldtype": "Float",
+      "in_list_view": 1,
+      "label": "Length"
+    },
+    {
       "fieldname": "description",
       "fieldtype": "Small Text",
       "label": "Description"

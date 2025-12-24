@@ -220,7 +220,7 @@ def _format_result(message: str) -> str:
 def _get_optional_field_updates(
     row_dict: frappe._dict, variant_doc: Document
 ) -> Dict[str, Any]:
-    """Return optional updates for custom item attributes if the fields exist."""
+    """Collect optional custom field values from the row if the Item supports them."""
 
     updates: Dict[str, Any] = {}
     meta = getattr(variant_doc, "meta", None)

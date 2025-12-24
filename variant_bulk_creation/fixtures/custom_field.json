@@ -5,7 +5,7 @@
     "dt": "Sales Order Item",
     "module": "Variant Bulk Creation",
     "fieldname": "template_item",
-    "label": "Template Item",
+    "label": "Variant Template",
     "fieldtype": "Link",
     "options": "Item",
     "insert_after": "item_code",
@@ -19,7 +19,7 @@
     "dt": "Sales Order Item",
     "module": "Variant Bulk Creation",
     "fieldname": "attribute_value",
-    "label": "Attribute Value",
+    "label": "Template Attribute Value",
     "fieldtype": "Link",
     "options": "Item Attribute Value",
     "insert_after": "template_item",
@@ -27,5 +27,33 @@
     "allow_in_quick_entry": 1,
     "reqd": 0,
     "translatable": 0
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Sales Order Item-sticker",
+    "dt": "Sales Order Item",
+    "module": "Variant Bulk Creation",
+    "fieldname": "sticker",
+    "label": "Sticker Attribute",
+    "fieldtype": "Link",
+    "options": "Item Attribute Value",
+    "insert_after": "attribute_value",
+    "depends_on": "eval:doc.template_item",
+    "allow_in_quick_entry": 1,
+    "reqd": 0,
+    "translatable": 0
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Sales Order Item-length",
+    "dt": "Sales Order Item",
+    "module": "Variant Bulk Creation",
+    "fieldname": "length",
+    "label": "Length (Numeric)",
+    "fieldtype": "Float",
+    "insert_after": "sticker",
+    "allow_in_quick_entry": 1,
+    "reqd": 0,
+    "precision": "2"
   }
 ]

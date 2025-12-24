@@ -124,6 +124,20 @@ frappe.ui.form.on('Sales Order', {
                 },
             };
         });
+
+        frm.set_query('sticker', 'items', function (doc, cdt, cdn) {
+            const row = locals[cdt][cdn] || {};
+            if (!row.template_item) {
+                return {};
+            }
+
+            return {
+                query: SALES_ORDER_ATTRIBUTE_QUERY,
+                filters: {
+                    attribute: 'Sticker',
+                },
+            };
+        });
     },
 });
 

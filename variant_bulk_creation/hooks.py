@@ -25,6 +25,8 @@ fixtures = [
         "filters": [["name", "in", [
             "Sales Order Item-template_item",
             "Sales Order Item-attribute_value",
+            "Sales Order Item-sticker",
+            "Sales Order Item-length",
         ]]],
     }
 ]

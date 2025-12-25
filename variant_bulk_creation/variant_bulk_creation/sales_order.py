@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 import frappe
@@ -45,6 +46,69 @@ def _get_template_attributes(template_item: str) -> dict:
             }
 
     return attributes
+
+
+def _extract_length_from_attribute(attribute_value: str) -> Optional[float]:
+    """Extract numeric length value from attribute string (e.g., '6m' -> 6.0)."""
+    if not attribute_value:
+        return None
+    match = re.search(r"(\d+\.?\d*)", str(attribute_value))
+    if match:
+        try:
+            return float(match[1])
+        except (ValueError, IndexError):
+            return None
+    return None
+
+
+def _detect_sticker_from_attribute(attribute_value: str) -> bool:
+    """Detect if the attribute value indicates sticker presence."""
+    if not attribute_value:
+        return False
+    attr_lower = str(attribute_value).lower()
+    return 'sticker' in attr_lower and 'no' not in attr_lower
+
+
+def _calculate_weight_for_variant(
+    template_item: str,
+    length: Optional[float],
+    sticker: Optional[str],
+) -> Optional[dict]:
+    """Calculate weight based on template kg/meter values and variant attributes.
+
+    Args:
+        template_item: The template item code
+        length: The numeric length value
+        sticker: The sticker attribute value
+
+    Returns:
+        Dictionary with weight_per_unit and weight_uom, or None if calculation not possible
+    """
+    if not template_item or length is None:
+        return None
+
+    # Get template item to read weight configuration
+    template = frappe.get_doc("Item", template_item)
+
+    # Detect if variant has sticker
+    has_sticker = _detect_sticker_from_attribute(sticker) if sticker else False
+
+    # Select appropriate kg/meter value
+    kg_per_meter = (
+        template.get("weight_per_meter_with_sticker") if has_sticker
+        else template.get("weight_per_meter_no_sticker")
+    )
+
+    if not kg_per_meter:
+        return None
+
+    # Calculate weight = length × kg/meter
+    calculated_weight = length * kg_per_meter
+
+    return {
+        "weight_per_unit": calculated_weight,
+        "weight_uom": "pcs"
+    }
 
 
 def _materialise_variant(
@@ -127,7 +191,15 @@ def _materialise_variant(
 
     variant_name = get_variant(template_item, args)
     if variant_name:
-        return frappe.get_doc("Item", variant_name)
+        variant_doc = frappe.get_doc("Item", variant_name)
+        # Calculate and set weight if not already set
+        weight_data = _calculate_weight_for_variant(template_item, length, sticker)
+        if weight_data and not variant_doc.get("weight_per_unit"):
+            variant_doc.weight_per_unit = weight_data["weight_per_unit"]
+            variant_doc.weight_uom = weight_data["weight_uom"]
+            variant_doc.flags.ignore_permissions = True
+            variant_doc.save()
+        return variant_doc
 
     variant_doc = create_variant(template_item, args)
     if isinstance(variant_doc, str):
@@ -137,6 +209,14 @@ def _materialise_variant(
         variant_doc.flags.ignore_permissions = True
         variant_doc.insert()
         variant_doc.reload()
+
+    # Calculate and set weight for newly created variant
+    weight_data = _calculate_weight_for_variant(template_item, length, sticker)
+    if weight_data:
+        variant_doc.weight_per_unit = weight_data["weight_per_unit"]
+        variant_doc.weight_uom = weight_data["weight_uom"]
+        variant_doc.flags.ignore_permissions = True
+        variant_doc.save()
 
     return variant_doc
 

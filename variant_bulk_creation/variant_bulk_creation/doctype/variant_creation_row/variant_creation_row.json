@@ -23,6 +23,20 @@
       "reqd": 1
     },
     {
+      "fieldname": "attribute_value_2",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Attribute Value 2",
+      "options": "Item Attribute Value"
+    },
+    {
+      "fieldname": "attribute_value_3",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Attribute Value 3",
+      "options": "Item Attribute Value"
+    },
+    {
       "fieldname": "item_code",
       "fieldtype": "Data",
       "in_list_view": 1,

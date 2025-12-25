@@ -70,5 +70,41 @@
     "allow_in_quick_entry": 1,
     "reqd": 0,
     "translatable": 0
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Item-weight_config_section",
+    "dt": "Item",
+    "module": "Variant Bulk Creation",
+    "fieldname": "weight_config_section",
+    "label": "Weight Configuration",
+    "fieldtype": "Section Break",
+    "insert_after": "weight_uom",
+    "depends_on": "eval:doc.has_variants",
+    "collapsible": 1
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Item-weight_per_meter_with_sticker",
+    "dt": "Item",
+    "module": "Variant Bulk Creation",
+    "fieldname": "weight_per_meter_with_sticker",
+    "label": "Weight Per Unit (kg/meter) - With Sticker",
+    "fieldtype": "Float",
+    "insert_after": "weight_config_section",
+    "depends_on": "eval:doc.has_variants",
+    "precision": "3"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Item-weight_per_meter_no_sticker",
+    "dt": "Item",
+    "module": "Variant Bulk Creation",
+    "fieldname": "weight_per_meter_no_sticker",
+    "label": "Weight Per Unit (kg/meter) - No Sticker",
+    "fieldtype": "Float",
+    "insert_after": "weight_per_meter_with_sticker",
+    "depends_on": "eval:doc.has_variants",
+    "precision": "3"
   }
 ]

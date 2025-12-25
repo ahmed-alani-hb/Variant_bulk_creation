@@ -28,6 +28,9 @@ fixtures = [
             "Sales Order Item-sticker",
             "Sales Order Item-length",
             "Sales Order Item-powder_code",
+            "Item-weight_config_section",
+            "Item-weight_per_meter_with_sticker",
+            "Item-weight_per_meter_no_sticker",
         ]]],
     }
 ]

@@ -220,4 +220,40 @@ frappe.ui.form.on('Sales Order Item', {
 
         ensureVariantForRow(frm, cdt, cdn);
     },
+    total_weight(frm, cdt, cdn) {
+        calculateQtyFromTotalWeight(cdt, cdn);
+    },
 });
+
+function calculateQtyFromTotalWeight(cdt, cdn) {
+    const row = locals[cdt][cdn] || {};
+
+    // Need total_weight and weight_per_unit to calculate
+    if (!row.total_weight || !row.weight_per_unit) {
+        return;
+    }
+
+    // weight_per_unit is in pcs/kg (pieces per kg)
+    // total_weight is total number of pieces
+    // Calculate weight in stock UOM (kg): weight_kg = total_weight / weight_per_unit
+    const weight_per_unit = parseFloat(row.weight_per_unit);
+    const total_weight = parseFloat(row.total_weight);
+
+    if (weight_per_unit <= 0 || isNaN(weight_per_unit) || isNaN(total_weight)) {
+        return;
+    }
+
+    // Calculate weight in base UOM (kg)
+    const weight_in_kg = total_weight / weight_per_unit;
+
+    // Get conversion factor (default to 1 if not set)
+    const conversion_factor = parseFloat(row.conversion_factor) || 1;
+
+    // Calculate quantity in transaction UOM
+    // stock_qty = qty × conversion_factor
+    // Therefore: qty = stock_qty / conversion_factor
+    const calculated_qty = weight_in_kg / conversion_factor;
+
+    // Set the calculated quantity
+    frappe.model.set_value(cdt, cdn, 'qty', calculated_qty);
+}

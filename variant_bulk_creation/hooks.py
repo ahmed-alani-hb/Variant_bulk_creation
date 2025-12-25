@@ -32,5 +32,9 @@ fixtures = [
             "Item-weight_per_meter_with_sticker",
             "Item-weight_per_meter_no_sticker",
         ]]],
+    },
+    {
+        "dt": "Property Setter",
+        "filters": [["doc_type", "=", "Sales Order Item"], ["field_name", "=", "total_weight"]],
     }
 ]

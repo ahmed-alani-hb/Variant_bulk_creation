@@ -23,6 +23,20 @@
       "reqd": 1
     },
     {
+      "fieldname": "attribute_value_2",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Attribute Value 2",
+      "options": "Item Attribute Value"
+    },
+    {
+      "fieldname": "attribute_value_3",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Attribute Value 3",
+      "options": "Item Attribute Value"
+    },
+    {
       "fieldname": "item_code",
       "fieldtype": "Data",
       "in_list_view": 1,
@@ -43,6 +57,26 @@
       "fieldname": "description",
       "fieldtype": "Small Text",
       "label": "Description"
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "calculated_weight_per_unit",
+      "fieldtype": "Float",
+      "in_list_view": 1,
+      "label": "Weight Per Unit",
+      "precision": "3",
+      "read_only": 1
+    },
+    {
+      "fieldname": "weight_uom",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Weight UOM",
+      "options": "UOM",
+      "read_only": 1
     }
   ],
   "hide_toolbar": 0,

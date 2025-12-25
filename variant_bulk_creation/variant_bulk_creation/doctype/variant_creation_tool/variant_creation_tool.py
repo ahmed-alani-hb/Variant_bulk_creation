@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence
+from decimal import Decimal, InvalidOperation
+from typing import Any, Dict, List, Optional, Sequence
 
 import frappe
 from frappe import _
@@ -16,6 +17,36 @@ except ImportError as exc:  # pragma: no cover - ERPNext not available in tests
     raise ImportError(
         "Variant Creation Tool requires ERPNext to be installed to create item variants."
     ) from exc
+
+
+def _generate_numeric_values(attribute_doc) -> List[str]:
+    """Generate numeric attribute values using range and increment."""
+
+    try:
+        start = Decimal(str(attribute_doc.from_range))
+        end = Decimal(str(attribute_doc.to_range))
+        step = Decimal(str(attribute_doc.increment))
+    except (InvalidOperation, TypeError):
+        frappe.throw(
+            _("Numeric attribute {0} is missing range or increment configuration.").format(
+                frappe.bold(attribute_doc.attribute_name or attribute_doc.name)
+            )
+        )
+
+    if step <= 0:
+        frappe.throw(
+            _("Numeric attribute {0} must have an increment greater than zero.").format(
+                frappe.bold(attribute_doc.attribute_name or attribute_doc.name)
+            )
+        )
+
+    values: List[str] = []
+    current = start
+    while current <= end:
+        values.append(str(current.normalize()))
+        current += step
+
+    return values
 
 
 def _get_template_context(template_item: str) -> frappe._dict:
@@ -32,35 +63,55 @@ def _get_template_context(template_item: str) -> frappe._dict:
         )
 
     attributes = [row for row in item.get("attributes", []) if row.get("attribute")]
-    if len(attributes) != 1:
+    if not attributes:
         frappe.throw(
-            _("Template {0} must have exactly one variant attribute to use this tool.").format(
+            _("Template {0} must define at least one variant attribute.").format(
                 frappe.bold(item.name)
             )
         )
 
-    attribute = attributes[0]
-    attribute_name = attribute.attribute
-
-    allowed_values = frappe.get_all(
-        "Item Attribute Value",
-        filters={"parent": attribute_name},
-        fields=["attribute_value", "abbr"],
-        order_by="idx asc",
-    )
-    if not allowed_values:
+    if len(attributes) > 3:
         frappe.throw(
-            _("Item Attribute {0} does not have any values configured.").format(
-                frappe.bold(attribute_name)
+            _(
+                "Template {0} has more than three attributes. This tool currently supports up to three attributes per template."
+            ).format(frappe.bold(item.name))
+        )
+
+    attribute_contexts: List[Dict[str, Any]] = []
+    for attribute in attributes:
+        attribute_name = attribute.attribute
+        attribute_doc = frappe.get_doc("Item Attribute", attribute_name)
+        numeric_values = bool(attribute_doc.numeric_values)
+
+        if numeric_values:
+            generated_values = _generate_numeric_values(attribute_doc)
+            allowed_values = [
+                {"attribute_value": value, "abbr": value} for value in generated_values
+            ]
+        else:
+            allowed_values = frappe.get_all(
+                "Item Attribute Value",
+                filters={"parent": attribute_name},
+                fields=["attribute_value", "abbr"],
+                order_by="idx asc",
             )
+            if not allowed_values:
+                frappe.throw(
+                    _("Item Attribute {0} does not have any values configured.").format(
+                        frappe.bold(attribute_name)
+                    )
+                )
+
+        attribute_contexts.append(
+            {
+                "name": attribute_name,
+                "values": allowed_values,
+                "numeric": numeric_values,
+            }
         )
 
     return frappe._dict(
-        {
-            "attribute": attribute_name,
-            "values": allowed_values,
-            "template_name": item.get("item_name") or item.name,
-        }
+        {"attributes": attribute_contexts, "template_name": item.get("item_name") or item.name}
     )
 
 
@@ -82,17 +133,22 @@ def fetch_template_details(template_item: str) -> frappe._dict:
     """Return attribute metadata and helper text for the selected template item."""
 
     context = _get_template_context(template_item)
-    allowed_values = context.get("values") or []
-    value_labels = ", ".join(
-        value.get("attribute_value")
-        for value in allowed_values
-        if value.get("attribute_value")
-    )
+    attributes = context.get("attributes") or []
+    attribute_names = [attr.get("name") for attr in attributes if attr.get("name")]
+    value_labels = {
+        attr.get("name"): ", ".join(
+            value.get("attribute_value")
+            for value in (attr.get("values") or [])
+            if value.get("attribute_value")
+        )
+        for attr in attributes
+        if attr.get("name")
+    }
     return frappe._dict(
         {
-            "attribute": context.attribute,
+            "attributes": attributes,
+            "attribute_names": ", ".join(attribute_names),
             "template_name": context.template_name,
-            "values": allowed_values,
             "value_labels": value_labels,
         }
     )
@@ -115,6 +171,17 @@ def search_attribute_values(
 
     if not attribute:
         return []
+
+    attribute_doc = frappe.get_doc("Item Attribute", attribute)
+    numeric_values = bool(attribute_doc.numeric_values)
+
+    if numeric_values:
+        values = _generate_numeric_values(attribute_doc)
+        filtered = [
+            value for value in values if not txt or txt.lower() in str(value).lower()
+        ]
+        sliced = filtered[start : start + page_len]
+        return [[value, value] for value in sliced]
 
     like_pattern = f"%{txt or ''}%"
 
@@ -155,12 +222,12 @@ def search_attribute_values(
 def _validate_rows(
     rows: Sequence[Dict], default_template: Optional[str]
 ) -> Dict[str, frappe._dict]:
-    """Ensure every row has a template item and valid attribute value."""
+    """Ensure every row has a template item and valid attribute values."""
 
     contexts: Dict[str, frappe._dict] = {}
     missing_template_rows: List[int] = []
-    missing_attribute_rows: List[int] = []
-    invalid_values: List[tuple[int, str, str]] = []
+    missing_attribute_rows: List[str] = []
+    invalid_values: List[tuple[int, str, str, str]] = []
 
     for idx, row in enumerate(rows):
         template_item = row.get("template_item") or default_template
@@ -171,19 +238,26 @@ def _validate_rows(
         if template_item not in contexts:
             contexts[template_item] = _get_template_context(template_item)
 
-        attribute_value = row.get("attribute_value")
-        if not attribute_value:
-            missing_attribute_rows.append(idx + 1)
-            continue
+        attributes = contexts[template_item].get("attributes") or []
+        for attr_index, attribute in enumerate(attributes):
+            allowed_values = attribute.get("values") or []
+            allowed = {
+                str(value.get("attribute_value"))
+                for value in allowed_values
+                if value.get("attribute_value")
+            }
 
-        allowed_values = contexts[template_item].get("values") or []
-        allowed = {
-            value.get("attribute_value")
-            for value in allowed_values
-            if value.get("attribute_value")
-        }
-        if attribute_value not in allowed:
-            invalid_values.append((idx + 1, attribute_value, template_item))
+            fieldnames = ["attribute_value", "attribute_value_2", "attribute_value_3"]
+            attribute_value = row.get(fieldnames[attr_index]) if attr_index < len(fieldnames) else None
+
+            if not attribute_value:
+                missing_attribute_rows.append(f"{idx + 1} ({attribute.get('name')})")
+                continue
+
+            if str(attribute_value) not in allowed:
+                invalid_values.append(
+                    (idx + 1, attribute_value, template_item, attribute.get("name") or _("Unknown"))
+                )
 
     if missing_template_rows:
         frappe.throw(
@@ -193,16 +267,12 @@ def _validate_rows(
         )
 
     if missing_attribute_rows:
-        frappe.throw(
-            _("Attribute Value is required in rows: {0}").format(
-                ", ".join(map(str, missing_attribute_rows))
-            )
-        )
+        frappe.throw(_("Attribute Value is required in rows: {0}").format(", ".join(missing_attribute_rows)))
 
     if invalid_values:
         formatted = ", ".join(
-            _("Row {0}: {1} (Template {2})").format(row, value, template)
-            for row, value, template in invalid_values
+            _("Row {0}: {1} (Template {2}, Attribute {3})").format(row, value, template, attribute)
+            for row, value, template, attribute in invalid_values
         )
         frappe.throw(
             _("Attribute values outside the template definition were provided: {0}").format(
@@ -215,6 +285,145 @@ def _validate_rows(
 
 def _format_result(message: str) -> str:
     return f"• {message}"
+
+
+def _extract_length_from_attribute(attribute_value: str) -> Optional[float]:
+    """Extract numeric length value from attribute string (e.g., '6m' -> 6.0)."""
+    if not attribute_value:
+        return None
+
+    import re
+    match = re.search(r"(\d+\.?\d*)", str(attribute_value))
+    if match:
+        try:
+            return float(match.group(1))
+        except (ValueError, IndexError):
+            return None
+    return None
+
+
+def _calculate_weight_from_attributes(
+    variant_doc,
+    weight_per_meter_with_sticker: Optional[float],
+    weight_per_meter_no_sticker: Optional[float]
+) -> Optional[float]:
+    """Calculate weight based on variant attributes and kg/meter values."""
+    if not variant_doc or not hasattr(variant_doc, 'attributes'):
+        return None
+
+    # Extract length from attributes
+    length = None
+    sticker_value = None
+
+    for attr in variant_doc.get('attributes', []):
+        attr_name = attr.get('attribute', '').lower()
+        attr_value = attr.get('attribute_value', '')
+
+        if attr_name == 'sticker':
+            sticker_value = attr_value
+        else:
+            # Try to extract length from any attribute
+            extracted = _extract_length_from_attribute(attr_value)
+            if extracted:
+                length = extracted
+
+    if not length:
+        return None
+
+    # Determine which kg/meter to use based on sticker attribute
+    kg_per_meter = 0.0
+    if sticker_value and 'sticker' in sticker_value.lower() and weight_per_meter_with_sticker:
+        kg_per_meter = weight_per_meter_with_sticker
+    elif sticker_value and 'no' in sticker_value.lower() and weight_per_meter_no_sticker:
+        kg_per_meter = weight_per_meter_no_sticker
+    elif not sticker_value and weight_per_meter_no_sticker:
+        # Default to no sticker if sticker attribute not present
+        kg_per_meter = weight_per_meter_no_sticker
+
+    if kg_per_meter > 0:
+        return length * kg_per_meter
+
+    return None
+
+
+def _format_attribute_summary(attributes: Sequence[Dict[str, Any]]) -> str:
+    """Return a human-friendly summary of attribute values for logging."""
+
+    return ", ".join(
+        f"{attr.get('name')}: {attr.get('value')}"
+        for attr in attributes
+        if attr.get("name") and attr.get("value")
+    )
+
+
+@frappe.whitelist()
+def create_variant_for_sales_attributes(template_item: str, attributes: Dict[str, Any]):
+    """Create (or fetch) an item variant from Sales Order row attribute selections."""
+
+    parsed_attributes = (
+        frappe.parse_json(attributes) if isinstance(attributes, str) else attributes or {}
+    )
+    context = _get_template_context(template_item)
+    attribute_defs = context.get("attributes") or []
+    field_map = {
+        "powder": "vbc_powder_code",
+        "sticker": "vbc_sticker",
+        "length": "vbc_length",
+    }
+
+    args: Dict[str, Any] = {}
+    missing: List[str] = []
+    for idx, attribute in enumerate(attribute_defs):
+        attr_name = attribute.get("name") or ""
+        attr_key = attr_name.lower()
+        matched_field = next((field for key, field in field_map.items() if key in attr_key), None)
+        fieldname = matched_field or attr_name
+
+        value = parsed_attributes.get(fieldname)
+        if not value:
+            missing.append(attribute.get("name"))
+            continue
+        if attribute.get("numeric"):
+            try:
+                value = str(Decimal(str(value)).normalize())
+            except (TypeError, ValueError, InvalidOperation):
+                frappe.throw(
+                    _("Attribute {0} requires a numeric value.").format(
+                        frappe.bold(attribute.get("name"))
+                    )
+                )
+        args[attribute.get("name")] = value
+
+    if missing:
+        frappe.throw(_("Attribute values are required for: {0}").format(", ".join(missing)))
+
+    existing = get_variant(template_item, args)
+    if existing:
+        item_doc = frappe.get_doc("Item", existing)
+        return frappe._dict(
+            {
+                "item_code": item_doc.name,
+                "item_name": item_doc.item_name,
+                "description": item_doc.description,
+            }
+        )
+
+    variant_doc = create_variant(template_item, args)
+    if isinstance(variant_doc, str):
+        variant_doc = frappe.get_doc("Item", variant_doc)
+
+    if not frappe.db.exists("Item", variant_doc.name):
+        variant_doc.flags.ignore_permissions = True
+        variant_doc.insert()
+        variant_doc.reload()
+
+    return frappe._dict(
+        {
+            "item_code": variant_doc.name,
+            "item_name": variant_doc.item_name,
+            "description": variant_doc.description,
+        }
+    )
 
 
 @frappe.whitelist()
@@ -242,15 +451,25 @@ def create_variants(doc: Dict) -> frappe._dict:
 
         context = contexts[template_item]
         template_label = context.template_name or template_item
-        attribute_value = row_dict.attribute_value
-        args = {context.attribute: attribute_value}
+        attribute_values: Dict[str, Any] = {}
+        attribute_log_context: List[Dict[str, Any]] = []
+        attributes = context.get("attributes") or []
+        fieldnames = ["attribute_value", "attribute_value_2", "attribute_value_3"]
+        for attr_index, attribute in enumerate(attributes):
+            fieldname = fieldnames[attr_index]
+            value = row_dict.get(fieldname)
+            attribute_values[attribute.get("name")] = value
+            attribute_log_context.append({"name": attribute.get("name"), "value": value})
+
+        args = attribute_values
+        attribute_summary = _format_attribute_summary(attribute_log_context) or row_dict.attribute_value
 
         existing = get_variant(template_item, args)
         if existing:
             log.append(
                 _format_result(
                     _("Skipped {0} for template {1}: variant already exists ({2}).").format(
-                        frappe.bold(attribute_value),
+                        frappe.bold(attribute_summary),
                         frappe.bold(template_label),
                         frappe.bold(existing),
                     )
@@ -284,6 +503,21 @@ def create_variants(doc: Dict) -> frappe._dict:
             if row_dict.description:
                 updates["description"] = row_dict.description
 
+            # Get kg/meter values from the template Item
+            template_doc = frappe.get_doc("Item", template_item)
+            weight_per_meter_with_sticker = template_doc.get("weight_per_meter_with_sticker")
+            weight_per_meter_no_sticker = template_doc.get("weight_per_meter_no_sticker")
+
+            # Calculate and set weight based on variant attributes and kg/meter from template
+            calculated_weight = _calculate_weight_from_attributes(
+                variant_doc,
+                weight_per_meter_with_sticker,
+                weight_per_meter_no_sticker
+            )
+            if calculated_weight:
+                updates["weight_per_unit"] = calculated_weight
+                updates["weight_uom"] = "pcs"
+
             if updates:
                 variant_doc.update(updates)
                 variant_doc.flags.ignore_permissions = True
@@ -302,7 +536,7 @@ def create_variants(doc: Dict) -> frappe._dict:
                         _(
                             "Created variant for {0} on template {1}, but could not determine the new item code."
                         ).format(
-                            frappe.bold(attribute_value),
+                            frappe.bold(attribute_summary),
                             frappe.bold(template_label),
                         )
                     )
@@ -314,7 +548,7 @@ def create_variants(doc: Dict) -> frappe._dict:
                 _format_result(
                     _("Created variant {0} for {1} on template {2}.").format(
                         frappe.bold(created_name),
-                        frappe.bold(attribute_value),
+                        frappe.bold(attribute_summary),
                         frappe.bold(template_label),
                     )
                 )
@@ -327,7 +561,7 @@ def create_variants(doc: Dict) -> frappe._dict:
             log.append(
                 _format_result(
                     _("Failed to create variant for {0} on template {1}: {2}").format(
-                        frappe.bold(attribute_value),
+                        frappe.bold(attribute_summary),
                         frappe.bold(template_label),
                         frappe.bold(str(exc)),
                     )

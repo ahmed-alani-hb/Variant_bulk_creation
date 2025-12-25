@@ -1,78 +1,116 @@
-frappe.provide('variant_bulk_creation.sales_order');
+// SPDX-License-Identifier: MIT
 
-const SALES_ORDER_ATTRIBUTE_QUERY =
-    'variant_bulk_creation.variant_bulk_creation.doctype.variant_creation_tool.variant_creation_tool.search_attribute_values';
-const SALES_ORDER_TEMPLATE_ATTRIBUTE =
-    'variant_bulk_creation.variant_bulk_creation.sales_order.get_template_attribute';
-const SALES_ORDER_RESOLVE_VARIANT =
-    'variant_bulk_creation.variant_bulk_creation.sales_order.resolve_sales_order_variant';
+const VBC_FETCH_TEMPLATE_METHOD =
+    'variant_bulk_creation.variant_bulk_creation.doctype.variant_creation_tool.variant_creation_tool.fetch_template_details';
+const VBC_CREATE_VARIANT_METHOD =
+    'variant_bulk_creation.variant_bulk_creation.doctype.variant_creation_tool.variant_creation_tool.create_variant_for_sales_attributes';
 
-function getVariantCache(frm) {
-    frm.sales_order_variant_cache = frm.sales_order_variant_cache || {};
-    return frm.sales_order_variant_cache;
+function vbcEnsureTemplateCache(frm) {
+    frm._vbc_template_cache = frm._vbc_template_cache || {};
 }
 
-function fetchTemplateAttribute(frm, templateItem) {
-    const cache = getVariantCache(frm);
-    if (!templateItem) {
-        return Promise.resolve(null);
-    }
-
-    if (cache[templateItem] && cache[templateItem].attribute) {
-        return Promise.resolve(cache[templateItem]);
-    }
-
-    return frm
-        .call({
-            method: SALES_ORDER_TEMPLATE_ATTRIBUTE,
-            args: { template_item: templateItem },
-            freeze: false,
-        })
-        .then((response) => {
-            cache[templateItem] = response?.message || {};
-            return cache[templateItem];
-        })
-        .catch(() => null);
+function vbcCacheTemplateAttributes(frm, template, attributes) {
+    vbcEnsureTemplateCache(frm);
+    frm._vbc_template_cache[template] = attributes;
 }
 
-function clearVariantSelection(cdt, cdn) {
-    frappe.model.set_value(cdt, cdn, {
-        item_code: null,
-        item_name: null,
-        description: null,
-        uom: null,
-        stock_uom: null,
+function vbcGetTemplateAttributes(frm, template) {
+    vbcEnsureTemplateCache(frm);
+    return frm._vbc_template_cache[template] || null;
+}
+
+const VBC_FIELD_MAP = {
+    powder: 'vbc_powder_code',
+    sticker: 'vbc_sticker',
+    length: 'vbc_length'
+};
+
+const VBC_LINK_ATTRIBUTE_FIELDS = ['vbc_powder_code', 'vbc_sticker'];
+const VBC_ATTRIBUTE_FIELDS = ['vbc_powder_code', 'vbc_sticker', 'vbc_length'];
+
+function vbcClearAttributeFields(row) {
+    VBC_ATTRIBUTE_FIELDS.forEach((field) => frappe.model.set_value(row.doctype, row.name, field, null));
+}
+
+function vbcTemplateFromRow(row) {
+    return row.vbc_template_item || row.item_code || null;
+}
+
+function vbcMatchFieldForAttribute(attribute) {
+    if (!attribute || !attribute.name) {
+        return null;
+    }
+
+    const name = attribute.name.toLowerCase();
+    if (name.includes('powder')) {
+        return VBC_FIELD_MAP.powder;
+    }
+    if (name.includes('sticker')) {
+        return VBC_FIELD_MAP.sticker;
+    }
+    if (name.includes('length')) {
+        return VBC_FIELD_MAP.length;
+    }
+
+    return null;
+}
+
+function vbcSetAttributeQueries(frm) {
+    VBC_LINK_ATTRIBUTE_FIELDS.forEach((fieldname) => {
+        frm.set_query(fieldname, 'items', (doc, cdt, cdn) => {
+            const row = locals[cdt][cdn];
+            if (!row) {
+                return {};
+            }
+
+            const template = vbcTemplateFromRow(row);
+            if (!template) {
+                return {};
+            }
+
+            const attributes = vbcGetTemplateAttributes(frm, template);
+            if (!attributes || !attributes.length) {
+                return {};
+            }
+
+            const attribute = attributes.find((attr) => vbcMatchFieldForAttribute(attr) === fieldname);
+            if (!attribute) {
+                return {};
+            }
+
+            return {
+                query: 'variant_bulk_creation.variant_bulk_creation.doctype.variant_creation_tool.variant_creation_tool.search_attribute_values',
+                filters: {
+                    attribute: attribute.name
+                }
+            };
+        });
     });
 }
 
-function applyVariantDetails(cdt, cdn, data) {
-    if (!data) {
+function vbcFetchAttributes(frm, template) {
+    return frappe.call({
+        method: VBC_FETCH_TEMPLATE_METHOD,
+        args: { template_item: template },
+        freeze: false
+    });
+}
+
+function vbcMaybeCreateVariant(frm, cdt, cdn) {
+    const row = locals[cdt][cdn];
+    if (!row) {
         return;
     }
 
-    const updates = {};
-
-    if (data.item_code) {
-        updates.item_code = data.item_code;
-    }
-    if (data.item_name) {
-        updates.item_name = data.item_name;
-    }
-    if (data.description) {
-        updates.description = data.description;
-    }
-    if (data.stock_uom) {
-        updates.uom = data.stock_uom;
-        updates.stock_uom = data.stock_uom;
-    }
-    if (data.conversion_factor) {
-        updates.conversion_factor = data.conversion_factor;
+    const template = vbcTemplateFromRow(row);
+    if (!template) {
+        return;
     }
 
-    if (Object.keys(updates).length) {
-        frappe.model.set_value(cdt, cdn, updates);
+    const attributes = vbcGetTemplateAttributes(frm, template);
+    if (!attributes || !attributes.length) {
+        return;
     }
-}
 
 function ensureVariantForRow(frm, cdt, cdn) {
     const row = locals[cdt][cdn] || {};
@@ -109,29 +147,36 @@ function ensureVariantForRow(frm, cdt, cdn) {
 
 frappe.ui.form.on('Sales Order', {
     setup(frm) {
-        getVariantCache(frm);
-
-        frm.set_query('template_item', 'items', () => ({
-            filters: { has_variants: 1 },
+        vbcSetAttributeQueries(frm);
+        frm.set_query('vbc_template_item', 'items', () => ({
+            filters: {
+                has_variants: 1,
+                variant_of: ['=', '']
+            }
         }));
+    }
+});
 
-        frm.set_query('attribute_value', 'items', function (doc, cdt, cdn) {
-            const row = locals[cdt][cdn] || {};
-            if (!row.template_item) {
-                return {};
+frappe.ui.form.on('Sales Order Item', {
+    item_code(frm, cdt, cdn) {
+        const row = locals[cdt][cdn];
+        if (!row) {
+            return;
+        }
+
+        vbcClearAttributeFields(row);
+
+        if (!row.item_code) {
+            return;
+        }
+
+        vbcFetchAttributes(frm, row.item_code).then((response) => {
+            if (!response.message) {
+                return;
             }
 
-            const cache = getVariantCache(frm)[row.template_item];
-            if (!cache || !cache.attribute) {
-                return {};
-            }
-
-            return {
-                query: SALES_ORDER_ATTRIBUTE_QUERY,
-                filters: {
-                    attribute: cache.attribute,
-                },
-            };
+            vbcCacheTemplateAttributes(frm, row.item_code, response.message.attributes || []);
+            vbcSetAttributeQueries(frm);
         });
 
         frm.set_query('sticker', 'items', function (doc, cdt, cdn) {
@@ -162,7 +207,6 @@ frappe.ui.form.on('Sales Order', {
             };
         });
     },
-});
 
 frappe.ui.form.on('Sales Order Item', {
     template_item(frm, cdt, cdn) {
@@ -178,8 +222,7 @@ frappe.ui.form.on('Sales Order Item', {
             return;
         }
 
-        const cache = getVariantCache(frm);
-        cache[row.template_item] = cache[row.template_item] || {};
+        vbcClearAttributeFields(row);
 
         if (row.sticker || row.powder_code || row.length != null) {
             frappe.model.set_value(cdt, cdn, {
@@ -189,9 +232,14 @@ frappe.ui.form.on('Sales Order Item', {
             });
         }
 
-        clearVariantSelection(cdt, cdn);
+        vbcFetchAttributes(frm, row.vbc_template_item).then((response) => {
+            if (!response.message) {
+                return;
+            }
 
-        fetchTemplateAttribute(frm, row.template_item);
+            vbcCacheTemplateAttributes(frm, row.vbc_template_item, response.message.attributes || []);
+            vbcSetAttributeQueries(frm);
+        });
     },
     powder_code(frm, cdt, cdn) {
         const row = locals[cdt][cdn] || {};
@@ -218,6 +266,15 @@ frappe.ui.form.on('Sales Order Item', {
             return;
         }
 
-        ensureVariantForRow(frm, cdt, cdn);
+    vbc_powder_code(frm, cdt, cdn) {
+        vbcMaybeCreateVariant(frm, cdt, cdn);
     },
+
+    vbc_sticker(frm, cdt, cdn) {
+        vbcMaybeCreateVariant(frm, cdt, cdn);
+    },
+
+    vbc_length(frm, cdt, cdn) {
+        vbcMaybeCreateVariant(frm, cdt, cdn);
+    }
 });

@@ -103,7 +103,11 @@ def _calculate_weight_for_variant(
         return None
 
     # Calculate weight = length × kg/meter
-    calculated_weight = length * kg_per_meter
+    # Ensure both values are floats (ERPNext may return strings from doc.get())
+    try:
+        calculated_weight = float(length) * float(kg_per_meter)
+    except (ValueError, TypeError):
+        return None
 
     return {
         "weight_per_unit": calculated_weight,

@@ -275,15 +275,20 @@ def _calculate_weight_from_template(
     if not kg_per_meter:
         return None
 
-    # Calculate weight = length × kg/meter
+    # Calculate pieces per kg (inverse calculation)
+    # weight_per_piece = length × kg_per_meter (e.g., 6.5m × 0.5kg/m = 3.25kg/piece)
+    # pieces_per_kg = 1 / weight_per_piece (e.g., 1 / 3.25 = 0.308 pcs/kg)
     # Ensure both values are floats (ERPNext may return strings from doc.get())
     try:
-        calculated_weight = float(length) * float(kg_per_meter)
-    except (ValueError, TypeError):
+        weight_per_piece = float(length) * float(kg_per_meter)
+        if weight_per_piece == 0:
+            return None
+        pieces_per_kg = 1 / weight_per_piece
+    except (ValueError, TypeError, ZeroDivisionError):
         return None
 
     return {
-        "weight_per_unit": calculated_weight,
+        "weight_per_unit": pieces_per_kg,
         "weight_uom": "pcs"
     }
 

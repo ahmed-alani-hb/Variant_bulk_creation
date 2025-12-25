@@ -44,9 +44,18 @@ function calculate_weight_preview(frm, cdt, cdn) {
 					template.weight_per_meter_no_sticker;
 
 				if (kg_per_meter) {
-					let calculated_weight = length * kg_per_meter;
-					frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', calculated_weight);
-					frappe.model.set_value(cdt, cdn, 'weight_uom', 'pcs');
+					// Calculate pieces per kg (inverse calculation)
+					// weight_per_piece = length × kg/meter
+					// pieces_per_kg = 1 / weight_per_piece
+					let weight_per_piece = length * kg_per_meter;
+					if (weight_per_piece > 0) {
+						let pieces_per_kg = 1 / weight_per_piece;
+						frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', pieces_per_kg);
+						frappe.model.set_value(cdt, cdn, 'weight_uom', 'pcs');
+					} else {
+						frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', null);
+						frappe.model.set_value(cdt, cdn, 'weight_uom', null);
+					}
 				} else {
 					frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', null);
 					frappe.model.set_value(cdt, cdn, 'weight_uom', null);

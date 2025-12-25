@@ -7,9 +7,9 @@ frappe.ui.form.on('Variant Creation Row', {
 function calculate_weight_preview(frm, cdt, cdn) {
 	let row = locals[cdt][cdn];
 
-	// Get kg/meter values from parent form
-	let weight_per_meter_with_sticker = frm.doc.weight_per_meter_with_sticker;
-	let weight_per_meter_no_sticker = frm.doc.weight_per_meter_no_sticker;
+	// Get kg/meter values from cached form properties (loaded from template Item)
+	let weight_per_meter_with_sticker = frm._weight_per_meter_with_sticker;
+	let weight_per_meter_no_sticker = frm._weight_per_meter_no_sticker;
 
 	if (!weight_per_meter_with_sticker && !weight_per_meter_no_sticker) {
 		// No weight configuration, skip calculation
@@ -46,7 +46,7 @@ function calculate_weight_preview(frm, cdt, cdn) {
 
 		// Update the row (preview only, actual calculation happens server-side)
 		frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', calculated_weight);
-		frappe.model.set_value(cdt, cdn, 'weight_uom', 'Nos');
+		frappe.model.set_value(cdt, cdn, 'weight_uom', 'pcs');
 	} else {
 		frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', 0);
 		frappe.model.set_value(cdt, cdn, 'weight_uom', '');

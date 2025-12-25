@@ -295,10 +295,6 @@ def create_variants(doc: Dict) -> frappe._dict:
     parsed = frappe.parse_json(doc) if not isinstance(doc, dict) else doc
     default_template = parsed.get("template_item")
 
-    # Get kg/meter values from the tool (template level)
-    weight_per_meter_with_sticker = parsed.get("weight_per_meter_with_sticker")
-    weight_per_meter_no_sticker = parsed.get("weight_per_meter_no_sticker")
-
     rows: List[Dict] = parsed.get("variants") or []
     if not rows:
         frappe.throw(_("Add at least one variant row."))
@@ -359,6 +355,11 @@ def create_variants(doc: Dict) -> frappe._dict:
             if row_dict.description:
                 updates["description"] = row_dict.description
 
+            # Get kg/meter values from the template Item
+            template_doc = frappe.get_doc("Item", template_item)
+            weight_per_meter_with_sticker = template_doc.get("weight_per_meter_with_sticker")
+            weight_per_meter_no_sticker = template_doc.get("weight_per_meter_no_sticker")
+
             # Calculate and set weight based on variant attributes and kg/meter from template
             calculated_weight = _calculate_weight_from_attributes(
                 variant_doc,
@@ -367,7 +368,7 @@ def create_variants(doc: Dict) -> frappe._dict:
             )
             if calculated_weight:
                 updates["weight_per_unit"] = calculated_weight
-                updates["weight_uom"] = "Nos"
+                updates["weight_uom"] = "pcs"
 
             if updates:
                 variant_doc.update(updates)

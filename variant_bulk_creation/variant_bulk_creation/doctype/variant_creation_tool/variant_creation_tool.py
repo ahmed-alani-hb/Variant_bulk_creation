@@ -287,6 +287,65 @@ def _format_result(message: str) -> str:
     return f"• {message}"
 
 
+def _extract_length_from_attribute(attribute_value: str) -> Optional[float]:
+    """Extract numeric length value from attribute string (e.g., '6m' -> 6.0)."""
+    if not attribute_value:
+        return None
+
+    import re
+    match = re.search(r"(\d+\.?\d*)", str(attribute_value))
+    if match:
+        try:
+            return float(match.group(1))
+        except (ValueError, IndexError):
+            return None
+    return None
+
+
+def _calculate_weight_from_attributes(
+    variant_doc,
+    weight_per_meter_with_sticker: Optional[float],
+    weight_per_meter_no_sticker: Optional[float]
+) -> Optional[float]:
+    """Calculate weight based on variant attributes and kg/meter values."""
+    if not variant_doc or not hasattr(variant_doc, 'attributes'):
+        return None
+
+    # Extract length from attributes
+    length = None
+    sticker_value = None
+
+    for attr in variant_doc.get('attributes', []):
+        attr_name = attr.get('attribute', '').lower()
+        attr_value = attr.get('attribute_value', '')
+
+        if attr_name == 'sticker':
+            sticker_value = attr_value
+        else:
+            # Try to extract length from any attribute
+            extracted = _extract_length_from_attribute(attr_value)
+            if extracted:
+                length = extracted
+
+    if not length:
+        return None
+
+    # Determine which kg/meter to use based on sticker attribute
+    kg_per_meter = 0.0
+    if sticker_value and 'sticker' in sticker_value.lower() and weight_per_meter_with_sticker:
+        kg_per_meter = weight_per_meter_with_sticker
+    elif sticker_value and 'no' in sticker_value.lower() and weight_per_meter_no_sticker:
+        kg_per_meter = weight_per_meter_no_sticker
+    elif not sticker_value and weight_per_meter_no_sticker:
+        # Default to no sticker if sticker attribute not present
+        kg_per_meter = weight_per_meter_no_sticker
+
+    if kg_per_meter > 0:
+        return length * kg_per_meter
+
+    return None
+
+
 def _format_attribute_summary(attributes: Sequence[Dict[str, Any]]) -> str:
     """Return a human-friendly summary of attribute values for logging."""
 
@@ -443,6 +502,21 @@ def create_variants(doc: Dict) -> frappe._dict:
                 updates["sku"] = row_dict.variant_sku
             if row_dict.description:
                 updates["description"] = row_dict.description
+
+            # Get kg/meter values from the template Item
+            template_doc = frappe.get_doc("Item", template_item)
+            weight_per_meter_with_sticker = template_doc.get("weight_per_meter_with_sticker")
+            weight_per_meter_no_sticker = template_doc.get("weight_per_meter_no_sticker")
+
+            # Calculate and set weight based on variant attributes and kg/meter from template
+            calculated_weight = _calculate_weight_from_attributes(
+                variant_doc,
+                weight_per_meter_with_sticker,
+                weight_per_meter_no_sticker
+            )
+            if calculated_weight:
+                updates["weight_per_unit"] = calculated_weight
+                updates["weight_uom"] = "pcs"
 
             if updates:
                 variant_doc.update(updates)

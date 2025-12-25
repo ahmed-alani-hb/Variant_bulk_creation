@@ -112,40 +112,36 @@ function vbcMaybeCreateVariant(frm, cdt, cdn) {
         return;
     }
 
-    const missing = attributes.filter((attribute) => {
-        const fieldname = vbcMatchFieldForAttribute(attribute);
-        return fieldname && !row[fieldname];
-    });
-    if (missing.length) {
+function ensureVariantForRow(frm, cdt, cdn) {
+    const row = locals[cdt][cdn] || {};
+    if (!row.template_item) {
         return;
     }
 
-    frappe.call({
-        method: VBC_CREATE_VARIANT_METHOD,
-        args: {
-            template_item: template,
-            attributes: {
-                vbc_powder_code: row.vbc_powder_code,
-                vbc_sticker: row.vbc_sticker,
-                vbc_length: row.vbc_length
-            }
-        },
-        freeze: true,
-        freeze_message: __('Creating variant from Sales Order row...'),
-        callback: (response) => {
-            if (!response.message) {
-                return;
-            }
+    // Require ALL three attributes to be provided before creating variant
+    // Template + Powder Code + Length + Sticker must all be present
+    const allAttributesSelected = row.powder_code && row.length != null && row.sticker;
+    if (!allAttributesSelected) {
+        return;
+    }
 
-            const { item_code, item_name, description } = response.message;
-            frappe.model.set_value(cdt, cdn, 'item_code', item_code);
-            if (item_name) {
-                frappe.model.set_value(cdt, cdn, 'item_name', item_name);
-            }
-            if (description) {
-                frappe.model.set_value(cdt, cdn, 'description', description);
-            }
-        }
+    fetchTemplateAttribute(frm, row.template_item).then(() => {
+        frm
+            .call({
+                method: SALES_ORDER_RESOLVE_VARIANT,
+                args: {
+                    template_item: row.template_item,
+                    powder_code: row.powder_code,
+                    length: row.length,
+                    sticker: row.sticker,
+                },
+                freeze: false,
+            })
+            .then((response) => {
+                if (response?.message) {
+                    applyVariantDetails(cdt, cdn, response.message);
+                }
+            });
     });
 }
 
@@ -182,18 +178,58 @@ frappe.ui.form.on('Sales Order Item', {
             vbcCacheTemplateAttributes(frm, row.item_code, response.message.attributes || []);
             vbcSetAttributeQueries(frm);
         });
+
+        frm.set_query('sticker', 'items', function (doc, cdt, cdn) {
+            const row = locals[cdt][cdn] || {};
+            if (!row.template_item) {
+                return {};
+            }
+
+            return {
+                query: SALES_ORDER_ATTRIBUTE_QUERY,
+                filters: {
+                    attribute: 'Sticker',
+                },
+            };
+        });
+
+        frm.set_query('powder_code', 'items', function (doc, cdt, cdn) {
+            const row = locals[cdt][cdn] || {};
+            if (!row.template_item) {
+                return {};
+            }
+
+            return {
+                query: SALES_ORDER_ATTRIBUTE_QUERY,
+                filters: {
+                    attribute: 'Powder Code',
+                },
+            };
+        });
     },
 
-    vbc_template_item(frm, cdt, cdn) {
-        const row = locals[cdt][cdn];
-        if (!row) {
+frappe.ui.form.on('Sales Order Item', {
+    template_item(frm, cdt, cdn) {
+        const row = locals[cdt][cdn] || {};
+
+        if (!row.template_item) {
+            frappe.model.set_value(cdt, cdn, {
+                sticker: null,
+                powder_code: null,
+                length: null,
+            });
+            clearVariantSelection(cdt, cdn);
             return;
         }
 
         vbcClearAttributeFields(row);
 
-        if (!row.vbc_template_item) {
-            return;
+        if (row.sticker || row.powder_code || row.length != null) {
+            frappe.model.set_value(cdt, cdn, {
+                sticker: null,
+                powder_code: null,
+                length: null,
+            });
         }
 
         vbcFetchAttributes(frm, row.vbc_template_item).then((response) => {
@@ -205,6 +241,30 @@ frappe.ui.form.on('Sales Order Item', {
             vbcSetAttributeQueries(frm);
         });
     },
+    powder_code(frm, cdt, cdn) {
+        const row = locals[cdt][cdn] || {};
+        if (!row.powder_code) {
+            clearVariantSelection(cdt, cdn);
+            return;
+        }
+
+        ensureVariantForRow(frm, cdt, cdn);
+    },
+    length(frm, cdt, cdn) {
+        const row = locals[cdt][cdn] || {};
+        if (row.length == null) {
+            clearVariantSelection(cdt, cdn);
+            return;
+        }
+
+        ensureVariantForRow(frm, cdt, cdn);
+    },
+    sticker(frm, cdt, cdn) {
+        const row = locals[cdt][cdn] || {};
+        if (!row.sticker) {
+            clearVariantSelection(cdt, cdn);
+            return;
+        }
 
     vbc_powder_code(frm, cdt, cdn) {
         vbcMaybeCreateVariant(frm, cdt, cdn);

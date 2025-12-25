@@ -232,21 +232,54 @@ def _extract_length_from_attribute(attribute_value: str) -> Optional[float]:
     return None
 
 
-def _calculate_weight_from_length(
-    attribute_value: str,
-    sticker_option: Optional[str],
+def _get_sticker_attribute_value(variant_doc) -> Optional[str]:
+    """Get the sticker attribute value from the variant."""
+    if not variant_doc or not hasattr(variant_doc, 'attributes'):
+        return None
+
+    for attr in variant_doc.get('attributes', []):
+        if attr.get('attribute', '').lower() == 'sticker':
+            return attr.get('attribute_value')
+
+    return None
+
+
+def _calculate_weight_from_attributes(
+    variant_doc,
     weight_per_meter_with_sticker: Optional[float],
     weight_per_meter_no_sticker: Optional[float]
 ) -> Optional[float]:
-    """Calculate weight based on length and kg/meter values."""
-    length = _extract_length_from_attribute(attribute_value)
+    """Calculate weight based on variant attributes and kg/meter values."""
+    if not variant_doc or not hasattr(variant_doc, 'attributes'):
+        return None
+
+    # Extract length from attributes
+    length = None
+    sticker_value = None
+
+    for attr in variant_doc.get('attributes', []):
+        attr_name = attr.get('attribute', '').lower()
+        attr_value = attr.get('attribute_value', '')
+
+        if attr_name == 'sticker':
+            sticker_value = attr_value
+        else:
+            # Try to extract length from any attribute
+            extracted = _extract_length_from_attribute(attr_value)
+            if extracted:
+                length = extracted
+
     if not length:
         return None
 
+    # Determine which kg/meter to use based on sticker attribute
     kg_per_meter = 0.0
-    if sticker_option == "With Sticker" and weight_per_meter_with_sticker:
+    if sticker_value and 'sticker' in sticker_value.lower() and weight_per_meter_with_sticker:
         kg_per_meter = weight_per_meter_with_sticker
-    elif sticker_option == "No Sticker" and weight_per_meter_no_sticker:
+    elif sticker_value and 'no' in sticker_value.lower() and weight_per_meter_no_sticker:
+        kg_per_meter = weight_per_meter_no_sticker
+    elif not sticker_value and weight_per_meter_no_sticker:
+        # Default to no sticker if sticker attribute not present
         kg_per_meter = weight_per_meter_no_sticker
 
     if kg_per_meter > 0:
@@ -261,6 +294,10 @@ def create_variants(doc: Dict) -> frappe._dict:
 
     parsed = frappe.parse_json(doc) if not isinstance(doc, dict) else doc
     default_template = parsed.get("template_item")
+
+    # Get kg/meter values from the tool (template level)
+    weight_per_meter_with_sticker = parsed.get("weight_per_meter_with_sticker")
+    weight_per_meter_no_sticker = parsed.get("weight_per_meter_no_sticker")
 
     rows: List[Dict] = parsed.get("variants") or []
     if not rows:
@@ -322,12 +359,11 @@ def create_variants(doc: Dict) -> frappe._dict:
             if row_dict.description:
                 updates["description"] = row_dict.description
 
-            # Calculate and set weight based on length and kg/meter
-            calculated_weight = _calculate_weight_from_length(
-                row_dict.attribute_value,
-                row_dict.sticker_option,
-                row_dict.weight_per_meter_with_sticker,
-                row_dict.weight_per_meter_no_sticker
+            # Calculate and set weight based on variant attributes and kg/meter from template
+            calculated_weight = _calculate_weight_from_attributes(
+                variant_doc,
+                weight_per_meter_with_sticker,
+                weight_per_meter_no_sticker
             )
             if calculated_weight:
                 updates["weight_per_unit"] = calculated_weight

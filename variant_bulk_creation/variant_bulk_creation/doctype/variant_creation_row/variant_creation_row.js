@@ -1,48 +1,53 @@
 frappe.ui.form.on('Variant Creation Row', {
 	attribute_value: function(frm, cdt, cdn) {
-		calculate_weight(frm, cdt, cdn);
-	},
-
-	sticker_option: function(frm, cdt, cdn) {
-		calculate_weight(frm, cdt, cdn);
-	},
-
-	weight_per_meter_with_sticker: function(frm, cdt, cdn) {
-		calculate_weight(frm, cdt, cdn);
-	},
-
-	weight_per_meter_no_sticker: function(frm, cdt, cdn) {
-		calculate_weight(frm, cdt, cdn);
+		calculate_weight_preview(frm, cdt, cdn);
 	}
 });
 
-function calculate_weight(frm, cdt, cdn) {
+function calculate_weight_preview(frm, cdt, cdn) {
 	let row = locals[cdt][cdn];
+
+	// Get kg/meter values from parent form
+	let weight_per_meter_with_sticker = frm.doc.weight_per_meter_with_sticker;
+	let weight_per_meter_no_sticker = frm.doc.weight_per_meter_no_sticker;
+
+	if (!weight_per_meter_with_sticker && !weight_per_meter_no_sticker) {
+		// No weight configuration, skip calculation
+		return;
+	}
 
 	// Extract numeric length from attribute_value
 	let length = extract_length_from_attribute(row.attribute_value);
 
 	if (!length) {
+		frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', 0);
+		frappe.model.set_value(cdt, cdn, 'weight_uom', '');
 		return;
 	}
 
-	// Get the appropriate kg/meter based on sticker option
+	// Check if attribute_value contains sticker information
+	let attribute_lower = row.attribute_value.toLowerCase();
 	let kg_per_meter = 0;
-	if (row.sticker_option === 'With Sticker' && row.weight_per_meter_with_sticker) {
-		kg_per_meter = row.weight_per_meter_with_sticker;
-	} else if (row.sticker_option === 'No Sticker' && row.weight_per_meter_no_sticker) {
-		kg_per_meter = row.weight_per_meter_no_sticker;
+
+	if (attribute_lower.includes('sticker') && !attribute_lower.includes('no')) {
+		// Contains "sticker" but not "no sticker"
+		kg_per_meter = weight_per_meter_with_sticker || 0;
+	} else if (attribute_lower.includes('no') && attribute_lower.includes('sticker')) {
+		// Contains "no sticker"
+		kg_per_meter = weight_per_meter_no_sticker || 0;
+	} else {
+		// Default to no sticker
+		kg_per_meter = weight_per_meter_no_sticker || 0;
 	}
 
 	if (kg_per_meter > 0) {
 		// Calculate weight: length × kg/meter
 		let calculated_weight = length * kg_per_meter;
 
-		// Update the row
+		// Update the row (preview only, actual calculation happens server-side)
 		frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', calculated_weight);
 		frappe.model.set_value(cdt, cdn, 'weight_uom', 'Nos');
 	} else {
-		// Clear the calculated weight if no valid kg/meter value
 		frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', 0);
 		frappe.model.set_value(cdt, cdn, 'weight_uom', '');
 	}

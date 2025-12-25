@@ -45,42 +45,21 @@
       "label": "Description"
     },
     {
-      "fieldname": "weight_section",
-      "fieldtype": "Section Break",
-      "label": "Weight Configuration"
-    },
-    {
-      "fieldname": "weight_per_meter_with_sticker",
-      "fieldtype": "Float",
-      "label": "Weight Per Unit (kg/meter) - With Sticker",
-      "precision": "3"
-    },
-    {
-      "fieldname": "weight_per_meter_no_sticker",
-      "fieldtype": "Float",
-      "label": "Weight Per Unit (kg/meter) - No Sticker",
-      "precision": "3"
-    },
-    {
-      "fieldname": "sticker_option",
-      "fieldtype": "Select",
-      "label": "Sticker Option",
-      "options": "With Sticker\nNo Sticker"
-    },
-    {
-      "fieldname": "column_break_weight",
+      "fieldname": "column_break_1",
       "fieldtype": "Column Break"
     },
     {
       "fieldname": "calculated_weight_per_unit",
       "fieldtype": "Float",
-      "label": "Calculated Weight Per Unit",
+      "in_list_view": 1,
+      "label": "Weight Per Unit",
       "precision": "3",
       "read_only": 1
     },
     {
       "fieldname": "weight_uom",
       "fieldtype": "Link",
+      "in_list_view": 1,
       "label": "Weight UOM",
       "options": "UOM",
       "read_only": 1

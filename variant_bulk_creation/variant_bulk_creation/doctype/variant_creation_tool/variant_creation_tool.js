@@ -146,8 +146,27 @@ frappe.ui.form.on('Variant Creation Tool', {
         if (frm.doc.template_item && !row.template_item) {
             frappe.model.set_value(cdt, cdn, 'template_item', frm.doc.template_item);
         }
+    },
+
+    weight_per_meter_with_sticker(frm) {
+        recalculate_all_weights(frm);
+    },
+
+    weight_per_meter_no_sticker(frm) {
+        recalculate_all_weights(frm);
     }
 });
+
+function recalculate_all_weights(frm) {
+    // Trigger recalculation for all variant rows
+    (frm.doc.variants || []).forEach((row) => {
+        if (row.attribute_value) {
+            frappe.run_serially([
+                () => frappe.model.trigger('attribute_value', row.doctype, row.name)
+            ]);
+        }
+    });
+}
 
 frappe.ui.form.on('Variant Creation Row', {
     template_item(frm, cdt, cdn) {

@@ -217,6 +217,44 @@ def _format_result(message: str) -> str:
     return f"• {message}"
 
 
+def _extract_length_from_attribute(attribute_value: str) -> Optional[float]:
+    """Extract numeric length value from attribute string (e.g., '6m' -> 6.0)."""
+    if not attribute_value:
+        return None
+
+    import re
+    match = re.search(r"(\d+\.?\d*)", str(attribute_value))
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return None
+    return None
+
+
+def _calculate_weight_from_length(
+    attribute_value: str,
+    sticker_option: Optional[str],
+    weight_per_meter_with_sticker: Optional[float],
+    weight_per_meter_no_sticker: Optional[float]
+) -> Optional[float]:
+    """Calculate weight based on length and kg/meter values."""
+    length = _extract_length_from_attribute(attribute_value)
+    if not length:
+        return None
+
+    kg_per_meter = 0.0
+    if sticker_option == "With Sticker" and weight_per_meter_with_sticker:
+        kg_per_meter = weight_per_meter_with_sticker
+    elif sticker_option == "No Sticker" and weight_per_meter_no_sticker:
+        kg_per_meter = weight_per_meter_no_sticker
+
+    if kg_per_meter > 0:
+        return length * kg_per_meter
+
+    return None
+
+
 @frappe.whitelist()
 def create_variants(doc: Dict) -> frappe._dict:
     """Create item variants for the rows included in the form."""
@@ -283,6 +321,17 @@ def create_variants(doc: Dict) -> frappe._dict:
                 updates["sku"] = row_dict.variant_sku
             if row_dict.description:
                 updates["description"] = row_dict.description
+
+            # Calculate and set weight based on length and kg/meter
+            calculated_weight = _calculate_weight_from_length(
+                row_dict.attribute_value,
+                row_dict.sticker_option,
+                row_dict.weight_per_meter_with_sticker,
+                row_dict.weight_per_meter_no_sticker
+            )
+            if calculated_weight:
+                updates["weight_per_unit"] = calculated_weight
+                updates["weight_uom"] = "Nos"
 
             if updates:
                 variant_doc.update(updates)

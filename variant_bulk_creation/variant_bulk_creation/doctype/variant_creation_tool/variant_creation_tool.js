@@ -148,6 +148,9 @@ frappe.ui.form.on('Variant Creation Tool', {
                 });
 
                 frm.refresh_field('variants');
+
+                // Fetch template Item to get kg/meter values
+                fetchTemplateWeightConfig(frm, frm.doc.template_item);
             }
         });
     },
@@ -163,6 +166,35 @@ frappe.ui.form.on('Variant Creation Tool', {
         }
     }
 });
+
+function fetchTemplateWeightConfig(frm, template_item) {
+    if (!template_item) {
+        return;
+    }
+
+    frappe.db.get_value('Item', template_item, ['weight_per_meter_with_sticker', 'weight_per_meter_no_sticker'])
+        .then(r => {
+            if (r.message) {
+                // Cache weight config in form
+                frm._weight_per_meter_with_sticker = r.message.weight_per_meter_with_sticker;
+                frm._weight_per_meter_no_sticker = r.message.weight_per_meter_no_sticker;
+
+                // Trigger recalculation for all variant rows
+                recalculate_all_weights(frm);
+            }
+        });
+}
+
+function recalculate_all_weights(frm) {
+    // Trigger recalculation for all variant rows
+    (frm.doc.variants || []).forEach((row) => {
+        if (row.attribute_value || row.attribute_value_2 || row.attribute_value_3) {
+            frappe.run_serially([
+                () => frappe.model.trigger('attribute_value', row.doctype, row.name)
+            ]);
+        }
+    });
+}
 
 frappe.ui.form.on('Variant Creation Row', {
     template_item(frm, cdt, cdn) {

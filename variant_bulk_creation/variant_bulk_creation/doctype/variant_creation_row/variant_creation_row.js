@@ -1,6 +1,14 @@
 frappe.ui.form.on('Variant Creation Row', {
 	attribute_value: function(frm, cdt, cdn) {
 		calculate_weight_preview(frm, cdt, cdn);
+	},
+
+	attribute_value_2: function(frm, cdt, cdn) {
+		calculate_weight_preview(frm, cdt, cdn);
+	},
+
+	attribute_value_3: function(frm, cdt, cdn) {
+		calculate_weight_preview(frm, cdt, cdn);
 	}
 });
 
@@ -16,8 +24,8 @@ function calculate_weight_preview(frm, cdt, cdn) {
 		return;
 	}
 
-	// Extract numeric length from attribute_value
-	let length = extract_length_from_attribute(row.attribute_value);
+	// Extract numeric length from any attribute value
+	let length = extract_length_from_attributes(row);
 
 	if (!length) {
 		frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', 0);
@@ -25,16 +33,14 @@ function calculate_weight_preview(frm, cdt, cdn) {
 		return;
 	}
 
-	// Check if attribute_value contains sticker information
-	let attribute_lower = row.attribute_value.toLowerCase();
+	// Determine sticker option from attributes
+	let has_sticker = check_sticker_from_attributes(row);
 	let kg_per_meter = 0;
 
-	if (attribute_lower.includes('sticker') && !attribute_lower.includes('no')) {
-		// Contains "sticker" but not "no sticker"
-		kg_per_meter = weight_per_meter_with_sticker || 0;
-	} else if (attribute_lower.includes('no') && attribute_lower.includes('sticker')) {
-		// Contains "no sticker"
-		kg_per_meter = weight_per_meter_no_sticker || 0;
+	if (has_sticker && weight_per_meter_with_sticker) {
+		kg_per_meter = weight_per_meter_with_sticker;
+	} else if (!has_sticker && weight_per_meter_no_sticker) {
+		kg_per_meter = weight_per_meter_no_sticker;
 	} else {
 		// Default to no sticker
 		kg_per_meter = weight_per_meter_no_sticker || 0;
@@ -53,7 +59,40 @@ function calculate_weight_preview(frm, cdt, cdn) {
 	}
 }
 
-function extract_length_from_attribute(attribute_value) {
+function extract_length_from_attributes(row) {
+	// Try to extract length from any attribute value
+	let attributes = [row.attribute_value, row.attribute_value_2, row.attribute_value_3];
+
+	for (let attr of attributes) {
+		if (!attr) continue;
+
+		let length = extract_numeric_value(attr);
+		if (length) return length;
+	}
+
+	return null;
+}
+
+function check_sticker_from_attributes(row) {
+	// Check if any attribute indicates "with sticker"
+	let attributes = [row.attribute_value, row.attribute_value_2, row.attribute_value_3];
+
+	for (let attr of attributes) {
+		if (!attr) continue;
+
+		let attr_lower = attr.toLowerCase();
+		if (attr_lower.includes('sticker') && !attr_lower.includes('no')) {
+			return true;
+		} else if (attr_lower.includes('no') && attr_lower.includes('sticker')) {
+			return false;
+		}
+	}
+
+	// Default to no sticker
+	return false;
+}
+
+function extract_numeric_value(attribute_value) {
 	if (!attribute_value) {
 		return null;
 	}

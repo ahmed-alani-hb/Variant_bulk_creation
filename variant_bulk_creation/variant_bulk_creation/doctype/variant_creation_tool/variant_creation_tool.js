@@ -188,7 +188,7 @@ function fetchTemplateWeightConfig(frm, template_item) {
 function recalculate_all_weights(frm) {
     // Trigger recalculation for all variant rows
     (frm.doc.variants || []).forEach((row) => {
-        if (row.attribute_value) {
+        if (row.attribute_value || row.attribute_value_2 || row.attribute_value_3) {
             frappe.run_serially([
                 () => frappe.model.trigger('attribute_value', row.doctype, row.name)
             ]);

@@ -7,14 +7,26 @@ function ensureAttributeCache(frm) {
     frm._variant_attribute_map = frm._variant_attribute_map || {};
 }
 
-function cacheTemplateAttribute(frm, template, attribute) {
+function cacheTemplateAttribute(frm, template, attributes) {
     ensureAttributeCache(frm);
-    frm._variant_attribute_map[template] = attribute;
+    frm._variant_attribute_map[template] = attributes;
 }
 
 function getTemplateAttribute(frm, template) {
     ensureAttributeCache(frm);
     return frm._variant_attribute_map[template] || null;
+}
+
+function getAttributeForField(attributes, fieldname) {
+    const fieldOrder = ['attribute_value', 'attribute_value_2', 'attribute_value_3'];
+    const index = fieldOrder.indexOf(fieldname);
+    return index >= 0 && attributes && attributes[index] ? attributes[index] : null;
+}
+
+function clearRowAttributeValues(row) {
+    ['attribute_value', 'attribute_value_2', 'attribute_value_3'].forEach((field) => {
+        frappe.model.set_value(row.doctype, row.name, field, null);
+    });
 }
 
 frappe.ui.form.on('Variant Creation Tool', {
@@ -38,28 +50,31 @@ frappe.ui.form.on('Variant Creation Tool', {
             };
         });
 
-        frm.set_query('attribute_value', 'variants', (doc, cdt, cdn) => {
-            const row = locals[cdt][cdn];
-            if (!row) {
-                return {};
-            }
-
-            const template = row.template_item || doc.template_item;
-            if (!template) {
-                return {};
-            }
-
-            const attribute = getTemplateAttribute(frm, template);
-            if (!attribute) {
-                return {};
-            }
-
-            return {
-                query: 'variant_bulk_creation.variant_bulk_creation.doctype.variant_creation_tool.variant_creation_tool.search_attribute_values',
-                filters: {
-                    attribute
+        ['attribute_value', 'attribute_value_2', 'attribute_value_3'].forEach((fieldname) => {
+            frm.set_query(fieldname, 'variants', (doc, cdt, cdn) => {
+                const row = locals[cdt][cdn];
+                if (!row) {
+                    return {};
                 }
-            };
+
+                const template = row.template_item || doc.template_item;
+                if (!template) {
+                    return {};
+                }
+
+                const attributes = getTemplateAttribute(frm, template);
+                const attribute = getAttributeForField(attributes, fieldname);
+                if (!attribute) {
+                    return {};
+                }
+
+                return {
+                    query: 'variant_bulk_creation.variant_bulk_creation.doctype.variant_creation_tool.variant_creation_tool.search_attribute_values',
+                    filters: {
+                        attribute: attribute.name
+                    }
+                };
+            });
         });
     },
 
@@ -103,31 +118,31 @@ frappe.ui.form.on('Variant Creation Tool', {
                     return;
                 }
 
-                frm.set_value('attribute_name', response.message.attribute);
-                cacheTemplateAttribute(frm, frm.doc.template_item, response.message.attribute);
+                frm.set_value('attribute_name', response.message.attribute_names);
+                cacheTemplateAttribute(frm, frm.doc.template_item, response.message.attributes);
 
                 const templateLabel = __('Template: {0}', [
                     frappe.utils.escape_html(response.message.template_name)
                 ]);
-                const attributeLabel = __('Attribute: {0}', [
-                    frappe.utils.escape_html(response.message.attribute)
-                ]);
-                const valueList = response.message.value_labels
-                    ? frappe.utils.escape_html(response.message.value_labels)
-                    : '';
-
+                const valueLabels = response.message.value_labels || {};
                 const helperHtml = `
                     <div class="form-text">
                         <div>${templateLabel}</div>
-                        <div>${attributeLabel}</div>
-                        <div class="small text-muted">${__('Allowed Values')}: ${valueList}</div>
+                        ${response.message.attributes
+                            .map((attr) => {
+                                const values = frappe.utils.escape_html(valueLabels[attr.name] || '');
+                                return `<div>${__('Attribute')}: ${frappe.utils.escape_html(
+                                    attr.name
+                                )}</div><div class="small text-muted">${__('Allowed Values')}: ${values}</div>`;
+                            })
+                            .join('')}
                     </div>`;
                 frm.fields_dict.attribute_hint.$wrapper.html(helperHtml);
                 frm.set_value('creation_log', '');
 
                 (frm.doc.variants || []).forEach((row) => {
                     if (!row.template_item) {
-                        frappe.model.set_value(row.doctype, row.name, 'attribute_value', null);
+                        clearRowAttributeValues(row);
                         frappe.model.set_value(row.doctype, row.name, 'template_item', frm.doc.template_item);
                     }
                 });
@@ -195,7 +210,7 @@ frappe.ui.form.on('Variant Creation Row', {
 
         const template = row.template_item;
         if (!template) {
-            frappe.model.set_value(cdt, cdn, 'attribute_value', null);
+            clearRowAttributeValues(row);
             return;
         }
 
@@ -209,8 +224,8 @@ frappe.ui.form.on('Variant Creation Row', {
                     return;
                 }
 
-                cacheTemplateAttribute(frm, template, response.message.attribute);
-                frappe.model.set_value(cdt, cdn, 'attribute_value', null);
+                cacheTemplateAttribute(frm, template, response.message.attributes);
+                clearRowAttributeValues(row);
             }
         });
     }

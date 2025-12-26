@@ -59,6 +59,10 @@
       "label": "Description"
     },
     {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
       "fieldname": "calculated_weight_per_unit",
       "fieldtype": "Float",
       "in_list_view": 1,

@@ -1,9 +1,13 @@
 frappe.ui.form.on('Variant Creation Row', {
-	template_item: function(frm, cdt, cdn) {
+	attribute_value: function(frm, cdt, cdn) {
 		calculate_weight_preview(frm, cdt, cdn);
 	},
 
-	attribute_value: function(frm, cdt, cdn) {
+	attribute_value_2: function(frm, cdt, cdn) {
+		calculate_weight_preview(frm, cdt, cdn);
+	},
+
+	attribute_value_3: function(frm, cdt, cdn) {
 		calculate_weight_preview(frm, cdt, cdn);
 	}
 });
@@ -11,75 +15,95 @@ frappe.ui.form.on('Variant Creation Row', {
 function calculate_weight_preview(frm, cdt, cdn) {
 	let row = locals[cdt][cdn];
 
-	if (!row.template_item || !row.attribute_value) {
-		frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', null);
-		frappe.model.set_value(cdt, cdn, 'weight_uom', null);
+	// Get kg/meter values from cached form properties (loaded from template Item)
+	let weight_per_meter_with_sticker = frm._weight_per_meter_with_sticker;
+	let weight_per_meter_no_sticker = frm._weight_per_meter_no_sticker;
+
+	if (!weight_per_meter_with_sticker && !weight_per_meter_no_sticker) {
+		// No weight configuration, skip calculation
 		return;
 	}
 
-	// Fetch template details to get weight per meter values
-	frappe.call({
-		method: 'frappe.client.get',
-		args: {
-			doctype: 'Item',
-			name: row.template_item
-		},
-		callback: function(r) {
-			if (r.message) {
-				let template = r.message;
-				let length = extract_length_from_attribute(row.attribute_value);
+	// Extract numeric length from any attribute value
+	let length = extract_length_from_attributes(row);
 
-				if (!length) {
-					frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', null);
-					frappe.model.set_value(cdt, cdn, 'weight_uom', null);
-					return;
-				}
+	if (!length) {
+		frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', 0);
+		frappe.model.set_value(cdt, cdn, 'weight_uom', '');
+		return;
+	}
 
-				// Determine if variant has sticker by checking attribute value
-				let has_sticker = detect_sticker_from_attribute(row.attribute_value);
+	// Determine sticker option from attributes
+	let has_sticker = check_sticker_from_attributes(row);
+	let kg_per_meter = 0;
 
-				// Select appropriate kg/meter value
-				let kg_per_meter = has_sticker ?
-					template.weight_per_meter_with_sticker :
-					template.weight_per_meter_no_sticker;
+	if (has_sticker && weight_per_meter_with_sticker) {
+		kg_per_meter = weight_per_meter_with_sticker;
+	} else if (!has_sticker && weight_per_meter_no_sticker) {
+		kg_per_meter = weight_per_meter_no_sticker;
+	} else {
+		// Default to no sticker
+		kg_per_meter = weight_per_meter_no_sticker || 0;
+	}
 
-				if (kg_per_meter) {
-					// Calculate pieces per kg (inverse calculation)
-					// weight_per_piece = length × kg/meter
-					// pieces_per_kg = 1 / weight_per_piece
-					let weight_per_piece = length * kg_per_meter;
-					if (weight_per_piece > 0) {
-						let pieces_per_kg = 1 / weight_per_piece;
-						frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', pieces_per_kg);
-						frappe.model.set_value(cdt, cdn, 'weight_uom', 'pcs');
-					} else {
-						frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', null);
-						frappe.model.set_value(cdt, cdn, 'weight_uom', null);
-					}
-				} else {
-					frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', null);
-					frappe.model.set_value(cdt, cdn, 'weight_uom', null);
-				}
-			}
-		}
-	});
+	if (kg_per_meter > 0) {
+		// Calculate weight: length × kg/meter
+		let calculated_weight = length * kg_per_meter;
+
+		// Update the row (preview only, actual calculation happens server-side)
+		frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', calculated_weight);
+		frappe.model.set_value(cdt, cdn, 'weight_uom', 'pcs');
+	} else {
+		frappe.model.set_value(cdt, cdn, 'calculated_weight_per_unit', 0);
+		frappe.model.set_value(cdt, cdn, 'weight_uom', '');
+	}
 }
 
-function extract_length_from_attribute(attribute_value) {
-	if (!attribute_value) return null;
+function extract_length_from_attributes(row) {
+	// Try to extract length from any attribute value
+	let attributes = [row.attribute_value, row.attribute_value_2, row.attribute_value_3];
 
-	// Extract numeric value from attribute (e.g., "6m" -> 6.0, "6.5m" -> 6.5)
-	let match = attribute_value.toString().match(/(\d+\.?\d*)/);
-	if (match) {
-		return parseFloat(match[1]);
+	for (let attr of attributes) {
+		if (!attr) continue;
+
+		let length = extract_numeric_value(attr);
+		if (length) return length;
 	}
+
 	return null;
 }
 
-function detect_sticker_from_attribute(attribute_value) {
-	if (!attribute_value) return false;
+function check_sticker_from_attributes(row) {
+	// Check if any attribute indicates "with sticker"
+	let attributes = [row.attribute_value, row.attribute_value_2, row.attribute_value_3];
 
-	// Check if attribute value contains "sticker" (case-insensitive)
-	let attr_lower = attribute_value.toString().toLowerCase();
-	return attr_lower.includes('sticker') && !attr_lower.includes('no');
+	for (let attr of attributes) {
+		if (!attr) continue;
+
+		let attr_lower = attr.toLowerCase();
+		if (attr_lower.includes('sticker') && !attr_lower.includes('no')) {
+			return true;
+		} else if (attr_lower.includes('no') && attr_lower.includes('sticker')) {
+			return false;
+		}
+	}
+
+	// Default to no sticker
+	return false;
+}
+
+function extract_numeric_value(attribute_value) {
+	if (!attribute_value) {
+		return null;
+	}
+
+	// Try to extract numeric value from the attribute
+	// Handles cases like "6", "6m", "6 meter", "6.5", "6.5m", etc.
+	let match = attribute_value.toString().match(/(\d+\.?\d*)/);
+
+	if (match) {
+		return parseFloat(match[1]);
+	}
+
+	return null;
 }

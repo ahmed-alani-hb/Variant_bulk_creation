@@ -106,5 +106,29 @@
     "insert_after": "weight_per_meter_with_sticker",
     "depends_on": "eval:doc.has_variants",
     "precision": "3"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Work Order Item-total_pcs",
+    "dt": "Work Order Item",
+    "module": "Variant Bulk Creation",
+    "fieldname": "total_pcs",
+    "label": "Total Pieces",
+    "fieldtype": "Float",
+    "insert_after": "qty",
+    "in_list_view": 1,
+    "precision": "2"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Stock Entry Detail-total_pcs",
+    "dt": "Stock Entry Detail",
+    "module": "Variant Bulk Creation",
+    "fieldname": "total_pcs",
+    "label": "Total Pieces",
+    "fieldtype": "Float",
+    "insert_after": "qty",
+    "in_list_view": 1,
+    "precision": "2"
   }
 ]

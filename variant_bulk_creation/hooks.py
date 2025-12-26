@@ -11,6 +11,8 @@ app_license = "MIT"
 
 doctype_js = {
     "Sales Order": "public/js/sales_order.js",
+    "Work Order": "public/js/work_order.js",
+    "Stock Entry": "public/js/stock_entry.js",
 }
 
 doc_events = {
@@ -31,6 +33,8 @@ fixtures = [
             "Item-weight_config_section",
             "Item-weight_per_meter_with_sticker",
             "Item-weight_per_meter_no_sticker",
+            "Work Order Item-total_pcs",
+            "Stock Entry Detail-total_pcs",
         ]]],
     },
     {

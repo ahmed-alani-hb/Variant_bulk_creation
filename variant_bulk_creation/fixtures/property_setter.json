@@ -1,6 +1,7 @@
 [
   {
     "doctype": "Property Setter",
+    "name": "Sales Order Item-total_weight-read_only",
     "doctype_or_field": "DocField",
     "doc_type": "Sales Order Item",
     "field_name": "total_weight",
@@ -10,6 +11,7 @@
   },
   {
     "doctype": "Property Setter",
+    "name": "Sales Order Item-total_weight-allow_on_submit",
     "doctype_or_field": "DocField",
     "doc_type": "Sales Order Item",
     "field_name": "total_weight",

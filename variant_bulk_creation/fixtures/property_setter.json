@@ -1,0 +1,22 @@
+[
+  {
+    "doctype": "Property Setter",
+    "name": "Sales Order Item-total_weight-read_only",
+    "doctype_or_field": "DocField",
+    "doc_type": "Sales Order Item",
+    "field_name": "total_weight",
+    "property": "read_only",
+    "property_type": "Check",
+    "value": "0"
+  },
+  {
+    "doctype": "Property Setter",
+    "name": "Sales Order Item-total_weight-allow_on_submit",
+    "doctype_or_field": "DocField",
+    "doc_type": "Sales Order Item",
+    "field_name": "total_weight",
+    "property": "allow_on_submit",
+    "property_type": "Check",
+    "value": "0"
+  }
+]

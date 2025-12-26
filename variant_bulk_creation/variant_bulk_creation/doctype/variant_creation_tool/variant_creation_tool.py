@@ -232,11 +232,11 @@ def _extract_length_from_attribute(attribute_value: str) -> Optional[float]:
 
 
 def _detect_sticker_from_attribute(attribute_value: str) -> bool:
-    """Detect if the attribute value indicates sticker presence."""
+    """Detect if the attribute value indicates sticker presence (any value except 'No sticker')."""
     if not attribute_value:
         return False
-    attr_lower = str(attribute_value).lower()
-    return 'sticker' in attr_lower and 'no' not in attr_lower
+    attr_lower = str(attribute_value).strip().lower()
+    return attr_lower != 'no sticker'
 
 
 def _calculate_weight_from_template(

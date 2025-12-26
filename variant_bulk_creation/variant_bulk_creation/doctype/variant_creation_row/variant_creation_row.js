@@ -79,7 +79,7 @@ function extract_length_from_attribute(attribute_value) {
 function detect_sticker_from_attribute(attribute_value) {
 	if (!attribute_value) return false;
 
-	// Check if attribute value contains "sticker" (case-insensitive)
-	let attr_lower = attribute_value.toString().toLowerCase();
-	return attr_lower.includes('sticker') && !attr_lower.includes('no');
+	// Any value except "No sticker" means the variant has a sticker
+	let attr_lower = attribute_value.toString().trim().toLowerCase();
+	return attr_lower !== 'no sticker';
 }

@@ -31,6 +31,9 @@ doc_events = {
     },
     "Delivery Note": {
         "on_submit": "variant_bulk_creation.variant_bulk_creation.delivery_note.populate_total_pcs_in_stock_ledger",
+    },
+    "Stock Reconciliation": {
+        "on_submit": "variant_bulk_creation.variant_bulk_creation.stock_reconciliation.populate_total_pcs_in_stock_ledger",
     }
 }
 

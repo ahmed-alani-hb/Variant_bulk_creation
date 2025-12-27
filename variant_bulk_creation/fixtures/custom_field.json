@@ -153,5 +153,40 @@
     "insert_after": "qty",
     "in_list_view": 1,
     "precision": "2"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM Item-total_pcs",
+    "dt": "BOM Item",
+    "module": "Variant Bulk Creation",
+    "fieldname": "total_pcs",
+    "label": "Total Pieces",
+    "fieldtype": "Float",
+    "insert_after": "qty",
+    "in_list_view": 1,
+    "precision": "2"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Work Order-total_pcs",
+    "dt": "Work Order",
+    "module": "Variant Bulk Creation",
+    "fieldname": "total_pcs",
+    "label": "Total Pieces to Manufacture",
+    "fieldtype": "Float",
+    "insert_after": "qty",
+    "precision": "2"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Work Order-total_pcs_produced",
+    "dt": "Work Order",
+    "module": "Variant Bulk Creation",
+    "fieldname": "total_pcs_produced",
+    "label": "Total Pieces Produced",
+    "fieldtype": "Float",
+    "insert_after": "produced_qty",
+    "read_only": 1,
+    "precision": "2"
   }
 ]

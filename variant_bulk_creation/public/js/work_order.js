@@ -1,10 +1,117 @@
-frappe.ui.form.on('Work Order Item', {
-	total_pcs(frm, cdt, cdn) {
-		calculateQtyFromTotalPcs(cdt, cdn);
+frappe.ui.form.on('Work Order', {
+	total_pcs(frm) {
+		calculateQtyFromTotalPcsHeader(frm);
+	},
+	qty(frm) {
+		calculateTotalPcsFromQty(frm);
+	},
+	produced_qty(frm) {
+		calculateTotalPcsProduced(frm);
+	},
+	bom_no(frm) {
+		// When BOM is selected, fetch total_pcs from BOM if available
+		if (frm.doc.bom_no) {
+			frappe.call({
+				method: 'frappe.client.get',
+				args: {
+					doctype: 'BOM',
+					name: frm.doc.bom_no
+				},
+				callback: function(r) {
+					if (r.message && r.message.total_pcs) {
+						frm.set_value('total_pcs', r.message.total_pcs);
+					}
+				}
+			});
+		}
 	}
 });
 
-function calculateQtyFromTotalPcs(cdt, cdn) {
+frappe.ui.form.on('Work Order Item', {
+	total_pcs(frm, cdt, cdn) {
+		calculateQtyFromTotalPcsRow(cdt, cdn);
+	}
+});
+
+function calculateQtyFromTotalPcsHeader(frm) {
+	if (!frm.doc.total_pcs || !frm.doc.production_item) {
+		return;
+	}
+
+	frappe.call({
+		method: 'frappe.client.get',
+		args: {
+			doctype: 'Item',
+			name: frm.doc.production_item
+		},
+		callback: function(r) {
+			if (r.message) {
+				const item = r.message;
+				const weight_per_unit = parseFloat(item.weight_per_unit);
+				const total_pcs = parseFloat(frm.doc.total_pcs);
+
+				if (weight_per_unit && weight_per_unit > 0 && !isNaN(total_pcs)) {
+					const weight_in_kg = total_pcs / weight_per_unit;
+					frm.set_value('qty', weight_in_kg);
+				}
+			}
+		}
+	});
+}
+
+function calculateTotalPcsFromQty(frm) {
+	if (!frm.doc.qty || !frm.doc.production_item || frm.doc.total_pcs) {
+		return; // Don't override if total_pcs is already set
+	}
+
+	frappe.call({
+		method: 'frappe.client.get',
+		args: {
+			doctype: 'Item',
+			name: frm.doc.production_item
+		},
+		callback: function(r) {
+			if (r.message) {
+				const item = r.message;
+				const weight_per_unit = parseFloat(item.weight_per_unit);
+				const qty = parseFloat(frm.doc.qty);
+
+				if (weight_per_unit && weight_per_unit > 0 && !isNaN(qty)) {
+					const total_pcs = qty * weight_per_unit;
+					frm.set_value('total_pcs', total_pcs);
+				}
+			}
+		}
+	});
+}
+
+function calculateTotalPcsProduced(frm) {
+	if (!frm.doc.produced_qty || !frm.doc.production_item) {
+		return;
+	}
+
+	frappe.call({
+		method: 'frappe.client.get',
+		args: {
+			doctype: 'Item',
+			name: frm.doc.production_item
+		},
+		callback: function(r) {
+			if (r.message) {
+				const item = r.message;
+				const weight_per_unit = parseFloat(item.weight_per_unit);
+				const produced_qty = parseFloat(frm.doc.produced_qty);
+
+				if (weight_per_unit && weight_per_unit > 0 && !isNaN(produced_qty)) {
+					const total_pcs_produced = produced_qty * weight_per_unit;
+					frm.set_value('total_pcs_produced', total_pcs_produced);
+				}
+			}
+		}
+	});
+}
+
+function calculateQtyFromTotalPcsRow(cdt, cdn) {
 	const row = locals[cdt][cdn] || {};
 
 	// Need total_pcs and weight_per_unit to calculate

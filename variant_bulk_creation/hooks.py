@@ -14,15 +14,22 @@ doctype_js = {
     "Work Order": "public/js/work_order.js",
     "Stock Entry": "public/js/stock_entry.js",
     "Delivery Note": "public/js/delivery_note.js",
+    "BOM": "public/js/bom.js",
 }
 
 doc_events = {
     "Sales Order": {
         "validate": "variant_bulk_creation.variant_bulk_creation.sales_order.ensure_sales_order_variants",
     },
+    "Work Order": {
+        "before_save": "variant_bulk_creation.variant_bulk_creation.work_order.populate_total_pcs_from_sales_order",
+    },
     "Stock Entry": {
         "before_save": "variant_bulk_creation.variant_bulk_creation.work_order.populate_total_pcs_in_stock_entry",
         "on_submit": "variant_bulk_creation.variant_bulk_creation.stock_entry.populate_total_pcs_in_stock_ledger",
+    },
+    "Delivery Note": {
+        "on_submit": "variant_bulk_creation.variant_bulk_creation.delivery_note.populate_total_pcs_in_stock_ledger",
     }
 }
 
@@ -42,6 +49,9 @@ fixtures = [
             "Stock Entry Detail-total_pcs",
             "Stock Ledger Entry-total_pcs",
             "Delivery Note Item-total_pcs",
+            "BOM Item-total_pcs",
+            "Work Order-total_pcs",
+            "Work Order-total_pcs_produced",
         ]]],
     },
     {

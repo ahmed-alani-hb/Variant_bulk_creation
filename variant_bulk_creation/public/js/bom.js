@@ -7,12 +7,15 @@ frappe.ui.form.on('BOM Item', {
 frappe.ui.form.on('BOM', {
 	refresh(frm) {
 		// Calculate total_pcs for the BOM based on finished good item
-		if (frm.doc.item && frm.doc.quantity) {
+		if (frm.doc.item && frm.doc.quantity && !frm.doc.total_pcs) {
 			calculateBomTotalPcs(frm);
 		}
 	},
 	quantity(frm) {
 		calculateBomTotalPcs(frm);
+	},
+	total_pcs(frm) {
+		calculateBomQuantityFromTotalPcs(frm);
 	}
 });
 
@@ -60,6 +63,11 @@ function calculateQtyFromTotalPcs(cdt, cdn) {
 }
 
 function calculateBomTotalPcs(frm) {
+	// Don't override if total_pcs is already set
+	if (frm.doc.total_pcs) {
+		return;
+	}
+
 	// Get BOM finished good item's weight_per_unit
 	frappe.call({
 		method: 'frappe.client.get',
@@ -79,6 +87,36 @@ function calculateBomTotalPcs(frm) {
 					// Therefore: total_pcs = qty × weight_per_unit
 					const total_pcs = quantity * weight_per_unit;
 					frm.set_value('total_pcs', total_pcs);
+				}
+			}
+		}
+	});
+}
+
+function calculateBomQuantityFromTotalPcs(frm) {
+	if (!frm.doc.total_pcs || !frm.doc.item) {
+		return;
+	}
+
+	// Get BOM finished good item's weight_per_unit
+	frappe.call({
+		method: 'frappe.client.get',
+		args: {
+			doctype: 'Item',
+			name: frm.doc.item
+		},
+		callback: function(r) {
+			if (r.message) {
+				const item = r.message;
+				const weight_per_unit = parseFloat(item.weight_per_unit);
+				const total_pcs = parseFloat(frm.doc.total_pcs);
+
+				if (weight_per_unit && weight_per_unit > 0 && !isNaN(total_pcs)) {
+					// Calculate quantity from total_pcs
+					// total_pcs = qty × weight_per_unit
+					// Therefore: qty = total_pcs / weight_per_unit
+					const quantity = total_pcs / weight_per_unit;
+					frm.set_value('quantity', quantity);
 				}
 			}
 		}

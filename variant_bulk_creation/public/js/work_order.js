@@ -8,6 +8,9 @@ frappe.ui.form.on('Work Order', {
 	produced_qty(frm) {
 		calculateTotalPcsProduced(frm);
 	},
+	total_pcs_produced(frm) {
+		calculateProducedQtyFromTotalPcs(frm);
+	},
 	bom_no(frm) {
 		// When BOM is selected, fetch total_pcs from BOM if available
 		if (frm.doc.bom_no) {
@@ -86,8 +89,8 @@ function calculateTotalPcsFromQty(frm) {
 }
 
 function calculateTotalPcsProduced(frm) {
-	if (!frm.doc.produced_qty || !frm.doc.production_item) {
-		return;
+	if (!frm.doc.produced_qty || !frm.doc.production_item || frm.doc.total_pcs_produced) {
+		return; // Don't override if total_pcs_produced is already set
 	}
 
 	frappe.call({
@@ -105,6 +108,32 @@ function calculateTotalPcsProduced(frm) {
 				if (weight_per_unit && weight_per_unit > 0 && !isNaN(produced_qty)) {
 					const total_pcs_produced = produced_qty * weight_per_unit;
 					frm.set_value('total_pcs_produced', total_pcs_produced);
+				}
+			}
+		}
+	});
+}
+
+function calculateProducedQtyFromTotalPcs(frm) {
+	if (!frm.doc.total_pcs_produced || !frm.doc.production_item) {
+		return;
+	}
+
+	frappe.call({
+		method: 'frappe.client.get',
+		args: {
+			doctype: 'Item',
+			name: frm.doc.production_item
+		},
+		callback: function(r) {
+			if (r.message) {
+				const item = r.message;
+				const weight_per_unit = parseFloat(item.weight_per_unit);
+				const total_pcs_produced = parseFloat(frm.doc.total_pcs_produced);
+
+				if (weight_per_unit && weight_per_unit > 0 && !isNaN(total_pcs_produced)) {
+					const produced_qty = total_pcs_produced / weight_per_unit;
+					frm.set_value('produced_qty', produced_qty);
 				}
 			}
 		}

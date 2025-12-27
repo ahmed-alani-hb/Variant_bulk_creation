@@ -186,7 +186,17 @@
     "label": "Total Pieces Produced",
     "fieldtype": "Float",
     "insert_after": "produced_qty",
-    "read_only": 1,
+    "precision": "2"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM-total_pcs",
+    "dt": "BOM",
+    "module": "Variant Bulk Creation",
+    "fieldname": "total_pcs",
+    "label": "Total Pieces",
+    "fieldtype": "Float",
+    "insert_after": "quantity",
     "precision": "2"
   }
 ]

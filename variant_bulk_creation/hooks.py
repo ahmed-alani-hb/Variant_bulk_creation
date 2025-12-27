@@ -50,6 +50,7 @@ fixtures = [
             "Stock Ledger Entry-total_pcs",
             "Delivery Note Item-total_pcs",
             "BOM Item-total_pcs",
+            "BOM-total_pcs",
             "Work Order-total_pcs",
             "Work Order-total_pcs_produced",
         ]]],

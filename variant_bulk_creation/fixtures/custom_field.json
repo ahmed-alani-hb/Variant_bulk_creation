@@ -220,5 +220,17 @@
     "fieldtype": "Link",
     "options": "Department",
     "insert_after": "company"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Stock Reconciliation Item-total_pcs",
+    "dt": "Stock Reconciliation Item",
+    "module": "Variant Bulk Creation",
+    "fieldname": "total_pcs",
+    "label": "Total Pieces",
+    "fieldtype": "Float",
+    "insert_after": "qty",
+    "in_list_view": 1,
+    "precision": "2"
   }
 ]

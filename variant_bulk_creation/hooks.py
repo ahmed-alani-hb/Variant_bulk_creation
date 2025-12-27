@@ -15,6 +15,7 @@ doctype_js = {
     "Stock Entry": "public/js/stock_entry.js",
     "Delivery Note": "public/js/delivery_note.js",
     "BOM": "public/js/bom.js",
+    "Stock Reconciliation": "public/js/stock_reconciliation.js",
 }
 
 doc_events = {
@@ -55,6 +56,7 @@ fixtures = [
             "Work Order-total_pcs",
             "Work Order-total_pcs_produced",
             "Work Order-department",
+            "Stock Reconciliation Item-total_pcs",
         ]]],
     },
     {

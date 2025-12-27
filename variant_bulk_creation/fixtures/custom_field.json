@@ -198,5 +198,27 @@
     "fieldtype": "Float",
     "insert_after": "quantity",
     "precision": "2"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "BOM-department",
+    "dt": "BOM",
+    "module": "Variant Bulk Creation",
+    "fieldname": "department",
+    "label": "Department",
+    "fieldtype": "Link",
+    "options": "Department",
+    "insert_after": "company"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Work Order-department",
+    "dt": "Work Order",
+    "module": "Variant Bulk Creation",
+    "fieldname": "department",
+    "label": "Department",
+    "fieldtype": "Link",
+    "options": "Department",
+    "insert_after": "company"
   }
 ]

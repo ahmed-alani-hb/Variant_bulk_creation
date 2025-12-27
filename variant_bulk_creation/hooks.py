@@ -9,6 +9,9 @@ app_license = "MIT"
 
 """Default hook configuration for the Variant Bulk Creation app."""
 
+# After install hook to setup permissions
+after_install = "variant_bulk_creation.variant_bulk_creation.setup_permissions.setup_item_attribute_value_permissions"
+
 doctype_js = {
     "Sales Order": "public/js/sales_order.js",
     "Work Order": "public/js/work_order.js",
@@ -73,5 +76,19 @@ fixtures = [
     {
         "dt": "Property Setter",
         "filters": [["doc_type", "=", "Sales Order Item"], ["field_name", "=", "total_weight"]],
+    },
+    {
+        "dt": "Custom DocPerm",
+        "filters": [
+            ["parent", "=", "Item Attribute Value"],
+            ["role", "in", [
+                "Sales User",
+                "Sales Manager",
+                "Stock User",
+                "Stock Manager",
+                "Manufacturing User",
+                "Manufacturing Manager"
+            ]]
+        ],
     }
 ]

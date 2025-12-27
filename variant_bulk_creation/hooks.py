@@ -18,6 +18,9 @@ doctype_js = {
 doc_events = {
     "Sales Order": {
         "validate": "variant_bulk_creation.variant_bulk_creation.sales_order.ensure_sales_order_variants",
+    },
+    "Stock Entry": {
+        "on_submit": "variant_bulk_creation.variant_bulk_creation.stock_entry.populate_total_pcs_in_stock_ledger",
     }
 }
 
@@ -35,6 +38,7 @@ fixtures = [
             "Item-weight_per_meter_no_sticker",
             "Work Order Item-total_pcs",
             "Stock Entry Detail-total_pcs",
+            "Stock Ledger Entry-total_pcs",
         ]]],
     },
     {

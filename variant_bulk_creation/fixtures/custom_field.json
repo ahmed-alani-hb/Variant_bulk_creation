@@ -130,5 +130,16 @@
     "insert_after": "qty",
     "in_list_view": 1,
     "precision": "2"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Stock Ledger Entry-total_pcs",
+    "dt": "Stock Ledger Entry",
+    "module": "Variant Bulk Creation",
+    "fieldname": "total_pcs",
+    "label": "Total Pieces",
+    "fieldtype": "Float",
+    "insert_after": "qty",
+    "precision": "2"
   }
 ]

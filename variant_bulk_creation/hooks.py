@@ -13,6 +13,7 @@ doctype_js = {
     "Sales Order": "public/js/sales_order.js",
     "Work Order": "public/js/work_order.js",
     "Stock Entry": "public/js/stock_entry.js",
+    "Delivery Note": "public/js/delivery_note.js",
 }
 
 doc_events = {
@@ -20,6 +21,7 @@ doc_events = {
         "validate": "variant_bulk_creation.variant_bulk_creation.sales_order.ensure_sales_order_variants",
     },
     "Stock Entry": {
+        "before_save": "variant_bulk_creation.variant_bulk_creation.work_order.populate_total_pcs_in_stock_entry",
         "on_submit": "variant_bulk_creation.variant_bulk_creation.stock_entry.populate_total_pcs_in_stock_ledger",
     }
 }
@@ -39,6 +41,7 @@ fixtures = [
             "Work Order Item-total_pcs",
             "Stock Entry Detail-total_pcs",
             "Stock Ledger Entry-total_pcs",
+            "Delivery Note Item-total_pcs",
         ]]],
     },
     {

@@ -141,5 +141,17 @@
     "fieldtype": "Float",
     "insert_after": "qty",
     "precision": "2"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Delivery Note Item-total_pcs",
+    "dt": "Delivery Note Item",
+    "module": "Variant Bulk Creation",
+    "fieldname": "total_pcs",
+    "label": "Total Pieces",
+    "fieldtype": "Float",
+    "insert_after": "qty",
+    "in_list_view": 1,
+    "precision": "2"
   }
 ]

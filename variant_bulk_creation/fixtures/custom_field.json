@@ -49,7 +49,7 @@
     "dt": "Sales Order Item",
     "module": "Variant Bulk Creation",
     "fieldname": "length",
-    "label": "Length (Numeric)",
+    "label": "Length (m)",
     "fieldtype": "Float",
     "insert_after": "sticker",
     "allow_in_quick_entry": 1,

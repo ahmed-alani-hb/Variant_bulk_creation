@@ -105,5 +105,10 @@ function extract_numeric_value(attribute_value) {
 		return parseFloat(match[1]);
 	}
 
-	return null;
+function detect_sticker_from_attribute(attribute_value) {
+	if (!attribute_value) return false;
+
+	// Any value except "No sticker" means the variant has a sticker
+	let attr_lower = attribute_value.toString().trim().toLowerCase();
+	return attr_lower !== 'no sticker';
 }

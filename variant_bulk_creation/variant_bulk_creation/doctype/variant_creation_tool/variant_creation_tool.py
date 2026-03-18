@@ -302,14 +302,12 @@ def _extract_length_from_attribute(attribute_value: str) -> Optional[float]:
     return None
 
 
-def _calculate_weight_from_attributes(
-    variant_doc,
-    weight_per_meter_with_sticker: Optional[float],
-    weight_per_meter_no_sticker: Optional[float]
-) -> Optional[float]:
-    """Calculate weight based on variant attributes and kg/meter values."""
-    if not variant_doc or not hasattr(variant_doc, 'attributes'):
-        return None
+def _detect_sticker_from_attribute(attribute_value: str) -> bool:
+    """Detect if the attribute value indicates sticker presence (any value except 'No sticker')."""
+    if not attribute_value:
+        return False
+    attr_lower = str(attribute_value).strip().lower()
+    return attr_lower != 'no sticker'
 
     # Extract length from attributes
     length = None

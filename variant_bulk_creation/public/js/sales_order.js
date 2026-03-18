@@ -57,6 +57,26 @@ function vbcMatchFieldForAttribute(attribute) {
     return null;
 }
 
+/* ---------- grid column visibility ---------- */
+
+function vbcSetupGridColumns(frm) {
+    // Ensure standard fields are visible in the items grid
+    const visible_fields = [
+        'template_item', 'item_code', 'qty', 'uom',
+        'total_weight', 'rate', 'net_amount',
+        'sticker', 'length', 'powder_code'
+    ];
+
+    const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
+    if (!grid) return;
+
+    visible_fields.forEach((fieldname) => {
+        grid.update_docfield_property(fieldname, 'in_list_view', 1);
+    });
+
+    grid.refresh();
+}
+
 /* ---------- variant resolution ---------- */
 
 function vbcClearVariantFields(cdt, cdn) {
@@ -101,12 +121,27 @@ function vbcApplyVariantDetails(frm, cdt, cdn, data) {
     }
 }
 
+function vbcGetWeightPerPiece(row) {
+    // Use cached value if available (set during variant resolution)
+    if (row._weight_per_piece) {
+        return row._weight_per_piece;
+    }
+    // Derive from persisted weight_per_unit (pieces_per_kg) field
+    // weight_per_piece = 1 / pieces_per_kg
+    if (row.weight_per_unit) {
+        const wpp = 1 / row.weight_per_unit;
+        row._weight_per_piece = wpp;
+        return wpp;
+    }
+    return null;
+}
+
 function vbcRecalcQtyFromTotalWeight(frm, cdt, cdn) {
     const row = locals[cdt][cdn];
     if (!row) return;
 
     const total_weight = row.total_weight;
-    const weight_per_piece = row._weight_per_piece;
+    const weight_per_piece = vbcGetWeightPerPiece(row);
 
     if (total_weight && weight_per_piece) {
         // total_weight stores "total pcs" entered by user
@@ -176,6 +211,10 @@ frappe.ui.form.on('Sales Order', {
                 };
             });
         });
+    },
+
+    refresh(frm) {
+        vbcSetupGridColumns(frm);
     },
 });
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 import frappe
@@ -75,24 +76,15 @@ def _calculate_weight_for_variant(
 ) -> Optional[dict]:
     """Calculate weight based on template kg/meter values and variant attributes.
 
-    Args:
-        template_item: The template item code
-        length: The numeric length value
-        sticker: The sticker attribute value
-
     Returns:
         Dictionary with weight_per_unit and weight_uom, or None if calculation not possible
     """
     if not template_item or length is None:
         return None
 
-    # Get template item to read weight configuration
     template = frappe.get_doc("Item", template_item)
-
-    # Detect if variant has sticker
     has_sticker = _detect_sticker_from_attribute(sticker) if sticker else False
 
-    # Select appropriate kg/meter value
     kg_per_meter = (
         template.get("weight_per_meter_with_sticker") if has_sticker
         else template.get("weight_per_meter_no_sticker")
@@ -101,10 +93,6 @@ def _calculate_weight_for_variant(
     if not kg_per_meter:
         return None
 
-    # Calculate pieces per kg (inverse calculation)
-    # weight_per_piece = length × kg_per_meter (e.g., 6.5m × 0.5kg/m = 3.25kg/piece)
-    # pieces_per_kg = 1 / weight_per_piece (e.g., 1 / 3.25 = 0.308 pcs/kg)
-    # Ensure both values are floats (ERPNext may return strings from doc.get())
     try:
         weight_per_piece = float(length) * float(kg_per_meter)
         if weight_per_piece == 0:
@@ -115,7 +103,8 @@ def _calculate_weight_for_variant(
 
     return {
         "weight_per_unit": pieces_per_kg,
-        "weight_uom": "pcs"
+        "weight_per_piece": weight_per_piece,
+        "weight_uom": "Kg"
     }
 
 
@@ -123,18 +112,10 @@ def _materialise_variant(
     template_item: str,
     sticker: Optional[str] = None,
     powder_code: Optional[str] = None,
-    length: Optional[float] = None,
+    length=None,
 ):
-    """Return an Item document for the requested variant, creating it if needed.
+    """Return an Item document for the requested variant, creating it if needed."""
 
-    Args:
-        template_item: The template item code
-        sticker: The sticker attribute value
-        powder_code: The powder code attribute value
-        length: The numeric length value (for numeric attributes)
-    """
-
-    # Require all three attributes to be provided
     if not all([sticker, powder_code, length is not None]):
         frappe.throw(
             _("All attributes (Powder Code, Length, and Sticker) must be provided for template {0}.").format(
@@ -144,17 +125,12 @@ def _materialise_variant(
 
     template_attributes = _get_template_attributes(template_item)
 
-    # Build args dict with all provided attribute values
     args = {}
-
-    # Track which attributes we've matched
     matched_sticker = False
     matched_powder = False
     matched_length = False
 
-    # Match provided values with template attributes
     for attr_name, attr_data in template_attributes.items():
-        # Try to match by attribute name (case-insensitive contains check)
         attr_lower = attr_name.lower()
 
         if 'sticker' in attr_lower and sticker:
@@ -176,11 +152,9 @@ def _materialise_variant(
             args[attr_name] = powder_code
             matched_powder = True
         elif 'length' in attr_lower and length is not None:
-            # Length is a numeric attribute - pass the number directly
             args[attr_name] = length
             matched_length = True
 
-    # Verify all three attributes were matched
     if not all([matched_sticker, matched_powder, matched_length]):
         missing = []
         if not matched_sticker:
@@ -214,19 +188,20 @@ def _materialise_variant(
 
 
 def ensure_sales_order_variants(doc, _event: Optional[str] = None) -> None:
-    """Populate Sales Order item codes from template and attribute selections."""
+    """Populate Sales Order item codes from template and attribute selections.
+
+    Reads from vbc_ prefixed custom fields on Sales Order Item.
+    """
 
     for row in doc.get("items", []):
-        template_item = row.get("template_item")
-        sticker = row.get("sticker")
-        powder_code = row.get("powder_code")
-        length = row.get("length")
+        template_item = row.get("vbc_template_item")
+        sticker = row.get("vbc_sticker")
+        powder_code = row.get("vbc_powder_code")
+        length = row.get("vbc_length")
 
-        # Skip if no template selected
         if not template_item:
             continue
 
-        # Skip if ALL attributes are not provided (require all three)
         if not all([sticker, powder_code, length is not None]):
             continue
 
@@ -262,6 +237,14 @@ def ensure_sales_order_variants(doc, _event: Optional[str] = None) -> None:
         if hasattr(row, "conversion_factor") and not row.get("conversion_factor"):
             row.conversion_factor = 1
 
+        # Calculate weight and update total_weight from total_pcs
+        weight_info = _calculate_weight_for_variant(template_item, length, sticker)
+        if weight_info and row.get("total_pcs"):
+            weight_per_piece = weight_info.get("weight_per_piece", 0)
+            if weight_per_piece:
+                row.qty = row.total_pcs * weight_per_piece
+                row.total_weight = row.qty
+
 
 @frappe.whitelist()
 def get_template_attribute(template_item: str) -> dict:
@@ -269,8 +252,6 @@ def get_template_attribute(template_item: str) -> dict:
 
     attributes = _get_template_attributes(template_item)
 
-    # Return the first attribute as the main one for backward compatibility
-    # This is used by the JavaScript to populate the attribute_value field
     main_attribute = next(iter(attributes.keys())) if attributes else None
 
     return {
@@ -284,9 +265,16 @@ def resolve_sales_order_variant(
     template_item: str,
     sticker: Optional[str] = None,
     powder_code: Optional[str] = None,
-    length: Optional[float] = None,
-) -> dict[str, Optional[str]]:
+    length=None,
+) -> dict:
     """Return the resolved variant details for client-side population."""
+
+    # Convert length to float if provided as string
+    if length is not None:
+        try:
+            length = float(length)
+        except (ValueError, TypeError):
+            pass
 
     variant_doc = _materialise_variant(
         template_item=template_item,
@@ -295,10 +283,18 @@ def resolve_sales_order_variant(
         length=length,
     )
 
-    return {
+    result = {
         "item_code": variant_doc.name,
         "item_name": variant_doc.get("item_name"),
         "description": variant_doc.get("description"),
         "stock_uom": variant_doc.get("stock_uom"),
         "conversion_factor": 1,
     }
+
+    # Include weight calculation for qty computation on the client
+    weight_info = _calculate_weight_for_variant(template_item, length, sticker)
+    if weight_info:
+        result["weight_per_unit"] = weight_info["weight_per_unit"]
+        result["weight_per_piece"] = weight_info["weight_per_piece"]
+
+    return result

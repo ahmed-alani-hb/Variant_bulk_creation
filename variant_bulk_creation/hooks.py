@@ -44,11 +44,11 @@ fixtures = [
     {
         "dt": "Custom Field",
         "filters": [["name", "in", [
-            "Sales Order Item-template_item",
-            "Sales Order Item-attribute_value",
-            "Sales Order Item-sticker",
-            "Sales Order Item-length",
-            "Sales Order Item-powder_code",
+            "Sales Order Item-vbc_template_item",
+            "Sales Order Item-vbc_powder_code",
+            "Sales Order Item-vbc_length",
+            "Sales Order Item-vbc_sticker",
+            "Sales Order Item-total_pcs",
             "Item-weight_config_section",
             "Item-weight_per_meter_with_sticker",
             "Item-weight_per_meter_no_sticker",
@@ -72,10 +72,6 @@ fixtures = [
             "Stock Reconciliation Item-powder_code",
             "Stock Reconciliation Item-total_pcs",
         ]]],
-    },
-    {
-        "dt": "Property Setter",
-        "filters": [["doc_type", "=", "Sales Order Item"], ["field_name", "=", "total_weight"]],
     },
     {
         "dt": "Custom DocPerm",

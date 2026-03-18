@@ -184,10 +184,12 @@ def _materialise_variant(
     if isinstance(variant_doc, str):
         return frappe.get_doc("Item", variant_doc)
 
-    # Check if variant already exists (get_variant may miss it due to
-    # numeric formatting differences)
-    if frappe.db.exists("Item", variant_doc.name):
-        return frappe.get_doc("Item", variant_doc.name)
+    # variant_doc.name is None until insert(); use item_code to check
+    # if the variant already exists (get_variant may miss it due to
+    # numeric formatting differences in attribute lookup)
+    variant_item_code = variant_doc.item_code or variant_doc.item_name
+    if variant_item_code and frappe.db.exists("Item", variant_item_code):
+        return frappe.get_doc("Item", variant_item_code)
 
     # Insert new variant, catch duplicate in case of race condition
     try:
@@ -195,7 +197,9 @@ def _materialise_variant(
         variant_doc.insert()
         variant_doc.reload()
     except frappe.DuplicateEntryError:
-        return frappe.get_doc("Item", variant_doc.name)
+        # Clear the error from the message log so no dialog is shown
+        frappe.clear_last_message()
+        return frappe.get_doc("Item", variant_item_code)
 
     return variant_doc
 

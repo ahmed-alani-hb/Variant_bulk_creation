@@ -76,8 +76,8 @@ def _calculate_weight_for_variant(
     """Calculate weight based on template kg/meter values and variant attributes.
 
     Returns:
-        Dictionary with weight_per_unit, weight_per_piece, and weight_uom,
-        or None if calculation not possible.
+        Dictionary with weight_per_unit (pcs/kg), weight_per_piece (kg/piece),
+        and weight_uom, or None if calculation not possible.
     """
     if not template_item or length is None:
         return None
@@ -114,7 +114,10 @@ def _materialise_variant(
     powder_code: Optional[str] = None,
     length=None,
 ):
-    """Return an Item document for the requested variant, creating it if needed."""
+    """Return an Item document for the requested variant, creating it if needed.
+
+    If the variant already exists, it is returned silently without any message.
+    """
 
     if not all([sticker, powder_code, length is not None]):
         frappe.throw(
@@ -171,18 +174,28 @@ def _materialise_variant(
             )
         )
 
+    # Try to find existing variant
     variant_name = get_variant(template_item, args)
     if variant_name:
         return frappe.get_doc("Item", variant_name)
 
+    # Create the variant doc (unsaved)
     variant_doc = create_variant(template_item, args)
     if isinstance(variant_doc, str):
-        variant_doc = frappe.get_doc("Item", variant_doc)
+        return frappe.get_doc("Item", variant_doc)
 
-    if not frappe.db.exists("Item", variant_doc.name):
+    # Check if variant already exists (get_variant may miss it due to
+    # numeric formatting differences)
+    if frappe.db.exists("Item", variant_doc.name):
+        return frappe.get_doc("Item", variant_doc.name)
+
+    # Insert new variant, catch duplicate in case of race condition
+    try:
         variant_doc.flags.ignore_permissions = True
         variant_doc.insert()
         variant_doc.reload()
+    except frappe.DuplicateEntryError:
+        return frappe.get_doc("Item", variant_doc.name)
 
     return variant_doc
 
@@ -238,13 +251,15 @@ def ensure_sales_order_variants(doc, _event: Optional[str] = None) -> None:
         if hasattr(row, "conversion_factor") and not row.get("conversion_factor"):
             row.conversion_factor = 1
 
-        # Calculate weight and set weight_per_unit so ERPNext can compute total_weight
+        # Set weight_per_unit = pieces_per_kg so ERPNext recalculates
+        # total_weight correctly: total_weight = pieces_per_kg * qty
+        # This preserves the user-entered "total pcs" value in total_weight
         weight_info = _calculate_weight_for_variant(template_item, length, sticker)
         if weight_info:
-            row.weight_per_unit = weight_info["weight_per_piece"]
+            row.weight_per_unit = weight_info["weight_per_unit"]
             row.weight_uom = weight_info["weight_uom"]
 
-            # If total_weight was entered as "total pcs", recalculate qty
+            # If total_weight was entered (as total pcs), recalculate qty
             total_weight = row.get("total_weight")
             if total_weight:
                 row.qty = total_weight * weight_info["weight_per_piece"]

@@ -82,15 +82,17 @@ function vbcApplyVariantDetails(frm, cdt, cdn, data) {
         updates.conversion_factor = data.conversion_factor || 1;
     }
 
-    // Set weight_per_unit so ERPNext can compute total_weight correctly
-    if (data.weight_per_piece) {
-        updates.weight_per_unit = data.weight_per_piece;
+    // Set weight_per_unit = pieces_per_kg so ERPNext's total_weight
+    // recalculation preserves the user's "total pcs" value:
+    // total_weight = pieces_per_kg * qty = pieces_per_kg * (total_pcs * kg_per_piece) = total_pcs
+    if (data.weight_per_unit) {
+        updates.weight_per_unit = data.weight_per_unit;
         updates.weight_uom = 'Kg';
     }
 
     frappe.model.set_value(cdt, cdn, updates);
 
-    // Store weight_per_piece on the row for total_weight → qty calculation
+    // Store weight_per_piece for total_weight → qty calculation
     const row = locals[cdt][cdn];
     if (row && data.weight_per_piece) {
         row._weight_per_piece = data.weight_per_piece;
@@ -107,8 +109,8 @@ function vbcRecalcQtyFromTotalWeight(frm, cdt, cdn) {
     const weight_per_piece = row._weight_per_piece;
 
     if (total_weight && weight_per_piece) {
-        // total_weight is used as "total pcs"
-        // qty (in Kg) = total_pcs * weight_per_piece (kg per piece)
+        // total_weight stores "total pcs" entered by user
+        // qty (in Kg) = total_pcs * weight_per_piece (kg/piece)
         const qty = total_weight * weight_per_piece;
         frappe.model.set_value(cdt, cdn, 'qty', flt(qty, precision('qty', row)));
     }

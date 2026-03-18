@@ -44,11 +44,10 @@ fixtures = [
     {
         "dt": "Custom Field",
         "filters": [["name", "in", [
-            "Sales Order Item-vbc_template_item",
-            "Sales Order Item-vbc_powder_code",
-            "Sales Order Item-vbc_length",
-            "Sales Order Item-vbc_sticker",
-            "Sales Order Item-total_pcs",
+            "Sales Order Item-template_item",
+            "Sales Order Item-powder_code",
+            "Sales Order Item-length",
+            "Sales Order Item-sticker",
             "Item-weight_config_section",
             "Item-weight_per_meter_with_sticker",
             "Item-weight_per_meter_no_sticker",

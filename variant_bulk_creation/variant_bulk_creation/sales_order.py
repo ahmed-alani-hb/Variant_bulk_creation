@@ -33,7 +33,6 @@ def _get_template_attributes(template_item: str) -> dict:
     for row in item.get("attributes", []):
         if row.get("attribute"):
             attr_name = row.attribute
-            # Get allowed values for this attribute
             allowed_values = frappe.get_all(
                 "Item Attribute Value",
                 filters={"parent": attr_name},
@@ -77,7 +76,8 @@ def _calculate_weight_for_variant(
     """Calculate weight based on template kg/meter values and variant attributes.
 
     Returns:
-        Dictionary with weight_per_unit and weight_uom, or None if calculation not possible
+        Dictionary with weight_per_unit, weight_per_piece, and weight_uom,
+        or None if calculation not possible.
     """
     if not template_item or length is None:
         return None
@@ -190,14 +190,15 @@ def _materialise_variant(
 def ensure_sales_order_variants(doc, _event: Optional[str] = None) -> None:
     """Populate Sales Order item codes from template and attribute selections.
 
-    Reads from vbc_ prefixed custom fields on Sales Order Item.
+    Reads from non-prefixed custom fields on Sales Order Item:
+    template_item, sticker, powder_code, length.
     """
 
     for row in doc.get("items", []):
-        template_item = row.get("vbc_template_item")
-        sticker = row.get("vbc_sticker")
-        powder_code = row.get("vbc_powder_code")
-        length = row.get("vbc_length")
+        template_item = row.get("template_item")
+        sticker = row.get("sticker")
+        powder_code = row.get("powder_code")
+        length = row.get("length")
 
         if not template_item:
             continue
@@ -237,13 +238,16 @@ def ensure_sales_order_variants(doc, _event: Optional[str] = None) -> None:
         if hasattr(row, "conversion_factor") and not row.get("conversion_factor"):
             row.conversion_factor = 1
 
-        # Calculate weight and update total_weight from total_pcs
+        # Calculate weight and set weight_per_unit so ERPNext can compute total_weight
         weight_info = _calculate_weight_for_variant(template_item, length, sticker)
-        if weight_info and row.get("total_pcs"):
-            weight_per_piece = weight_info.get("weight_per_piece", 0)
-            if weight_per_piece:
-                row.qty = row.total_pcs * weight_per_piece
-                row.total_weight = row.qty
+        if weight_info:
+            row.weight_per_unit = weight_info["weight_per_piece"]
+            row.weight_uom = weight_info["weight_uom"]
+
+            # If total_weight was entered as "total pcs", recalculate qty
+            total_weight = row.get("total_weight")
+            if total_weight:
+                row.qty = total_weight * weight_info["weight_per_piece"]
 
 
 @frappe.whitelist()
@@ -269,7 +273,6 @@ def resolve_sales_order_variant(
 ) -> dict:
     """Return the resolved variant details for client-side population."""
 
-    # Convert length to float if provided as string
     if length is not None:
         try:
             length = float(length)

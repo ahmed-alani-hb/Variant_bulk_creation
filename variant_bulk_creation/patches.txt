@@ -1,2 +1,3 @@
 variant_bulk_creation.variant_bulk_creation.variant_bulk_creation
 variant_bulk_creation.variant_bulk_creation.patches.create_sales_order_fields
+variant_bulk_creation.variant_bulk_creation.patches.remove_server_script

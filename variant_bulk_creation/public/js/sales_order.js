@@ -51,9 +51,9 @@ function vbcMatchFieldForAttribute(attribute) {
         return null;
     }
     const name = attribute.name.toLowerCase();
-    if (name.includes('powder')) return 'vbc_powder_code';
-    if (name.includes('sticker')) return 'vbc_sticker';
-    if (name.includes('length')) return 'vbc_length';
+    if (name.includes('powder')) return 'powder_code';
+    if (name.includes('sticker')) return 'sticker';
+    if (name.includes('length')) return 'length';
     return null;
 }
 
@@ -82,26 +82,34 @@ function vbcApplyVariantDetails(frm, cdt, cdn, data) {
         updates.conversion_factor = data.conversion_factor || 1;
     }
 
+    // Set weight_per_unit so ERPNext can compute total_weight correctly
+    if (data.weight_per_piece) {
+        updates.weight_per_unit = data.weight_per_piece;
+        updates.weight_uom = 'Kg';
+    }
+
     frappe.model.set_value(cdt, cdn, updates);
 
-    // Store weight_per_piece on the row for total_pcs → qty calculation
+    // Store weight_per_piece on the row for total_weight → qty calculation
     const row = locals[cdt][cdn];
     if (row && data.weight_per_piece) {
         row._weight_per_piece = data.weight_per_piece;
-        // Recalculate qty from total_pcs if total_pcs is already set
-        vbcRecalcQty(frm, cdt, cdn);
+        // Recalculate qty from total_weight if total_weight is already set
+        vbcRecalcQtyFromTotalWeight(frm, cdt, cdn);
     }
 }
 
-function vbcRecalcQty(frm, cdt, cdn) {
+function vbcRecalcQtyFromTotalWeight(frm, cdt, cdn) {
     const row = locals[cdt][cdn];
     if (!row) return;
 
-    const total_pcs = row.total_pcs;
+    const total_weight = row.total_weight;
     const weight_per_piece = row._weight_per_piece;
 
-    if (total_pcs && weight_per_piece) {
-        const qty = total_pcs * weight_per_piece;
+    if (total_weight && weight_per_piece) {
+        // total_weight is used as "total pcs"
+        // qty (in Kg) = total_pcs * weight_per_piece (kg per piece)
+        const qty = total_weight * weight_per_piece;
         frappe.model.set_value(cdt, cdn, 'qty', flt(qty, precision('qty', row)));
     }
 }
@@ -110,11 +118,11 @@ function vbcMaybeResolveVariant(frm, cdt, cdn) {
     const row = locals[cdt][cdn];
     if (!row) return;
 
-    const template = row.vbc_template_item;
+    const template = row.template_item;
     if (!template) return;
 
     // All three attributes must be set
-    if (!row.vbc_powder_code || row.vbc_length == null || !row.vbc_sticker) {
+    if (!row.powder_code || row.length == null || !row.sticker) {
         return;
     }
 
@@ -123,9 +131,9 @@ function vbcMaybeResolveVariant(frm, cdt, cdn) {
             method: VBC_RESOLVE_VARIANT_METHOD,
             args: {
                 template_item: template,
-                powder_code: row.vbc_powder_code,
-                length: row.vbc_length,
-                sticker: row.vbc_sticker,
+                powder_code: row.powder_code,
+                length: row.length,
+                sticker: row.sticker,
             },
             freeze: false,
         }).then((response) => {
@@ -141,7 +149,7 @@ function vbcMaybeResolveVariant(frm, cdt, cdn) {
 frappe.ui.form.on('Sales Order', {
     setup(frm) {
         // Template field query: only show template items
-        frm.set_query('vbc_template_item', 'items', () => ({
+        frm.set_query('template_item', 'items', () => ({
             filters: {
                 has_variants: 1,
                 variant_of: ['=', ''],
@@ -149,12 +157,12 @@ frappe.ui.form.on('Sales Order', {
         }));
 
         // Powder code and sticker attribute queries
-        ['vbc_powder_code', 'vbc_sticker'].forEach((fieldname) => {
+        ['powder_code', 'sticker'].forEach((fieldname) => {
             frm.set_query(fieldname, 'items', (doc, cdt, cdn) => {
                 const row = locals[cdt][cdn];
-                if (!row || !row.vbc_template_item) return {};
+                if (!row || !row.template_item) return {};
 
-                const attributes = vbcGetTemplateAttributes(frm, row.vbc_template_item);
+                const attributes = vbcGetTemplateAttributes(frm, row.template_item);
                 if (!attributes || !attributes.length) return {};
 
                 const attr = attributes.find((a) => vbcMatchFieldForAttribute(a) === fieldname);
@@ -172,51 +180,51 @@ frappe.ui.form.on('Sales Order', {
 /* ---------- Sales Order Item events ---------- */
 
 frappe.ui.form.on('Sales Order Item', {
-    vbc_template_item(frm, cdt, cdn) {
+    template_item(frm, cdt, cdn) {
         const row = locals[cdt][cdn] || {};
 
         // Clear attribute fields and variant selection when template changes
         frappe.model.set_value(cdt, cdn, {
-            vbc_powder_code: null,
-            vbc_sticker: null,
-            vbc_length: null,
+            powder_code: null,
+            sticker: null,
+            length: null,
         });
         vbcClearVariantFields(cdt, cdn);
 
-        if (!row.vbc_template_item) return;
+        if (!row.template_item) return;
 
         // Fetch and cache template attributes
-        vbcFetchAndCacheAttributes(frm, row.vbc_template_item);
+        vbcFetchAndCacheAttributes(frm, row.template_item);
     },
 
-    vbc_powder_code(frm, cdt, cdn) {
+    powder_code(frm, cdt, cdn) {
         const row = locals[cdt][cdn] || {};
-        if (!row.vbc_powder_code) {
+        if (!row.powder_code) {
             vbcClearVariantFields(cdt, cdn);
             return;
         }
         vbcMaybeResolveVariant(frm, cdt, cdn);
     },
 
-    vbc_length(frm, cdt, cdn) {
+    length(frm, cdt, cdn) {
         const row = locals[cdt][cdn] || {};
-        if (row.vbc_length == null) {
+        if (row.length == null) {
             vbcClearVariantFields(cdt, cdn);
             return;
         }
         vbcMaybeResolveVariant(frm, cdt, cdn);
     },
 
-    vbc_sticker(frm, cdt, cdn) {
+    sticker(frm, cdt, cdn) {
         const row = locals[cdt][cdn] || {};
-        if (!row.vbc_sticker) {
+        if (!row.sticker) {
             vbcClearVariantFields(cdt, cdn);
             return;
         }
         vbcMaybeResolveVariant(frm, cdt, cdn);
     },
 
-    total_pcs(frm, cdt, cdn) {
-        vbcRecalcQty(frm, cdt, cdn);
+    total_weight(frm, cdt, cdn) {
+        vbcRecalcQtyFromTotalWeight(frm, cdt, cdn);
     },
 });

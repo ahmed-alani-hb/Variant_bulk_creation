@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Optional
 
 import frappe
@@ -200,15 +199,7 @@ def _materialise_variant(
 
     variant_name = get_variant(template_item, args)
     if variant_name:
-        variant_doc = frappe.get_doc("Item", variant_name)
-        # Calculate and set weight if not already set
-        weight_data = _calculate_weight_for_variant(template_item, length, sticker)
-        if weight_data and not variant_doc.get("weight_per_unit"):
-            variant_doc.weight_per_unit = weight_data["weight_per_unit"]
-            variant_doc.weight_uom = weight_data["weight_uom"]
-            variant_doc.flags.ignore_permissions = True
-            variant_doc.save()
-        return variant_doc
+        return frappe.get_doc("Item", variant_name)
 
     variant_doc = create_variant(template_item, args)
     if isinstance(variant_doc, str):
@@ -218,14 +209,6 @@ def _materialise_variant(
         variant_doc.flags.ignore_permissions = True
         variant_doc.insert()
         variant_doc.reload()
-
-    # Calculate and set weight for newly created variant
-    weight_data = _calculate_weight_for_variant(template_item, length, sticker)
-    if weight_data:
-        variant_doc.weight_per_unit = weight_data["weight_per_unit"]
-        variant_doc.weight_uom = weight_data["weight_uom"]
-        variant_doc.flags.ignore_permissions = True
-        variant_doc.save()
 
     return variant_doc
 

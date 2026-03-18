@@ -18,9 +18,9 @@ entering the attribute values that should become variants.
 
 ## Variant Creation Tool
 
-1. (Optional) Select a default Item template that is configured with exactly one
-   variant attribute.
-2. The tool automatically shows the attribute name and the allowed values for
+1. (Optional) Select a default Item template that is configured with up to three
+   variant attributes.
+2. The tool automatically shows the attribute names and the allowed values for
    the selected template.
 3. Add rows to the table for each variant you would like to create. Use the new
    **Template Item** column to pick the appropriate template per row, then
@@ -30,9 +30,24 @@ entering the attribute values that should become variants.
    row, prevents duplicates, creates the missing variants, and reports the
    outcome in the Creation Log field.
 
+## Sales Order integration
+
+The app injects dedicated columns on the Sales Order Item table:
+
+- **Template Profile** to choose the template item.
+- **Powder Coat** and **Sticker** for selecting attribute values tied to those
+  attributes.
+- **Length (Numeric)** for entering numeric attributes configured with
+  From/To/Increment on the Item Attribute.
+
+When you select a template in **Template Profile** and fill the attribute
+columns, the app will create (or reuse) the matching variant and swap the row's
+Item Code to that variant automatically.
+
 ### Validation rules
 
-- Only template items with a single attribute are supported.
+- Templates can include one to three attributes; each attribute must have defined
+  values.
 - Each row must reference a valid template (via the default selection or the
   Template Item column) and choose an attribute value defined on that template.
 - Attribute values must exist on the template's attribute definition.

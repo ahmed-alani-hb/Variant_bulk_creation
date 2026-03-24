@@ -322,11 +322,18 @@ def ensure_sales_order_variants(doc, _event: Optional[str] = None) -> None:
 
 
 def _sales_order_before_print(doc, method=None, settings=None):
-    """Convert image paths to <img> tags for print rendering."""
+    """Convert image paths to <img> tags for print rendering.
+
+    Uses markupsafe.Markup so Jinja does not auto-escape the HTML.
+    """
+    from markupsafe import Markup
+
     for row in doc.get("items", []):
         image = row.get("image")
-        if image and not image.startswith("<"):
-            row.image = '<img src="{0}" style="max-height:80px; max-width:120px;">'.format(image)
+        if image and not str(image).startswith("<"):
+            row.image = Markup(
+                '<img src="{0}" style="max-height:80px; max-width:120px;">'.format(image)
+            )
 
 
 @frappe.whitelist()

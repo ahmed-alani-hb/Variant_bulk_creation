@@ -129,30 +129,32 @@ function vbcRecalcQtyFromTotalWeight(frm, cdt, cdn) {
     const row = locals[cdt][cdn];
     if (!row || row._vbc_guard) return;
 
-    const total_weight = row.total_weight;
+    const total_pcs = row.total_weight;
     const weight_per_piece = vbcGetWeightPerPiece(row);
 
-    if (total_weight && weight_per_piece) {
-        // total_weight = "total pcs" entered by user
-        // qty (in Kg) = total_pcs * weight_per_piece (kg/piece)
-        const qty = total_weight * weight_per_piece;
-        row._vbc_guard = true;
-        frappe.model.set_value(cdt, cdn, 'qty', flt(qty, precision('qty', row))).then(() => {
-            // ERPNext recalculates total_weight = weight_per_unit * qty
-            // = pieces_per_kg * (total_pcs * kg_per_piece) = total_pcs
-            // So total_weight should be preserved automatically.
-            // But if it was overwritten (e.g. weight_per_unit not yet loaded),
-            // restore the user's value.
-            const current_tw = locals[cdt][cdn] && locals[cdt][cdn].total_weight;
-            if (current_tw !== undefined && Math.abs(current_tw - total_weight) > 0.01) {
-                frappe.model.set_value(cdt, cdn, 'total_weight', total_weight).then(() => {
-                    row._vbc_guard = false;
-                });
-            } else {
-                row._vbc_guard = false;
-            }
-        });
-    }
+    if (!total_pcs || !weight_per_piece) return;
+
+    // total_weight = "total pcs" entered by user
+    // qty (in Kg) = total_pcs * weight_per_piece (kg/piece)
+    const qty = total_pcs * weight_per_piece;
+    row._vbc_guard = true;
+    row._vbc_total_pcs = total_pcs;
+
+    frappe.model.set_value(cdt, cdn, 'qty', flt(qty, precision('qty', row)));
+
+    // ERPNext's calculate_taxes_and_totals recalculates total_weight
+    // asynchronously after qty changes. Force-restore the user's
+    // entered total_pcs value after ERPNext finishes.
+    setTimeout(() => {
+        const r = locals[cdt] && locals[cdt][cdn];
+        if (r && r._vbc_total_pcs) {
+            frappe.model.set_value(cdt, cdn, 'total_weight', r._vbc_total_pcs).then(() => {
+                if (r) r._vbc_guard = false;
+            });
+        } else {
+            if (r) r._vbc_guard = false;
+        }
+    }, 500);
 }
 
 function vbcMaybeResolveVariant(frm, cdt, cdn) {

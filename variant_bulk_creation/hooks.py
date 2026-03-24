@@ -12,6 +12,13 @@ app_license = "MIT"
 # After install hook to setup permissions
 after_install = "variant_bulk_creation.variant_bulk_creation.setup_permissions.setup_item_attribute_value_permissions"
 
+# Jinja environment: make render_item_image available in print formats
+jenv = {
+    "methods": [
+        "variant_bulk_creation.variant_bulk_creation.jinja_utils.render_item_image",
+    ]
+}
+
 doctype_js = {
     "Sales Order": "public/js/sales_order.js",
     "Work Order": "public/js/work_order.js",
@@ -24,7 +31,6 @@ doctype_js = {
 doc_events = {
     "Sales Order": {
         "validate": "variant_bulk_creation.variant_bulk_creation.sales_order.ensure_sales_order_variants",
-        "before_print": "variant_bulk_creation.variant_bulk_creation.sales_order._sales_order_before_print",
     },
     "Work Order": {
         "before_save": "variant_bulk_creation.variant_bulk_creation.work_order.populate_total_pcs_from_sales_order",

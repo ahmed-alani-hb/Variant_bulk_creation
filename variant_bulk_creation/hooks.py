@@ -80,6 +80,10 @@ fixtures = [
         ]]],
     },
     {
+        "dt": "Print Format",
+        "filters": [["name", "=", "Sales Order - VBC"]],
+    },
+    {
         "dt": "Custom DocPerm",
         "filters": [
             ["parent", "=", "Item Attribute Value"],

@@ -60,7 +60,6 @@ function vbcMatchFieldForAttribute(attribute) {
 /* ---------- grid column visibility ---------- */
 
 function vbcSetupGridColumns(frm) {
-    // Ensure standard fields are visible in the items grid
     const visible_fields = [
         'template_item', 'item_code', 'qty', 'uom',
         'total_weight', 'rate', 'net_amount',
@@ -89,6 +88,8 @@ function vbcClearVariantFields(cdt, cdn) {
 }
 
 function vbcApplyVariantDetails(frm, cdt, cdn, data) {
+    // Set item_code — ERPNext will fetch item details including
+    // weight_per_unit (which is set on the variant Item itself)
     const updates = {
         item_code: data.item_code,
         item_name: data.item_name,
@@ -102,32 +103,20 @@ function vbcApplyVariantDetails(frm, cdt, cdn, data) {
         updates.conversion_factor = data.conversion_factor || 1;
     }
 
-    // Set weight_per_unit = pieces_per_kg so ERPNext's total_weight
-    // recalculation preserves the user's "total pcs" value:
-    // total_weight = pieces_per_kg * qty = pieces_per_kg * (total_pcs * kg_per_piece) = total_pcs
-    if (data.weight_per_unit) {
-        updates.weight_per_unit = data.weight_per_unit;
-        updates.weight_uom = 'Kg';
-    }
-
     frappe.model.set_value(cdt, cdn, updates);
 
     // Store weight_per_piece for total_weight → qty calculation
     const row = locals[cdt][cdn];
     if (row && data.weight_per_piece) {
         row._weight_per_piece = data.weight_per_piece;
-        // Recalculate qty from total_weight if total_weight is already set
-        vbcRecalcQtyFromTotalWeight(frm, cdt, cdn);
     }
 }
 
 function vbcGetWeightPerPiece(row) {
-    // Use cached value if available (set during variant resolution)
     if (row._weight_per_piece) {
         return row._weight_per_piece;
     }
     // Derive from persisted weight_per_unit (pieces_per_kg) field
-    // weight_per_piece = 1 / pieces_per_kg
     if (row.weight_per_unit) {
         const wpp = 1 / row.weight_per_unit;
         row._weight_per_piece = wpp;
@@ -138,17 +127,34 @@ function vbcGetWeightPerPiece(row) {
 
 function vbcRecalcQtyFromTotalWeight(frm, cdt, cdn) {
     const row = locals[cdt][cdn];
-    if (!row) return;
+    if (!row || row._vbc_guard) return;
 
-    const total_weight = row.total_weight;
+    const total_pcs = row.total_weight;
     const weight_per_piece = vbcGetWeightPerPiece(row);
 
-    if (total_weight && weight_per_piece) {
-        // total_weight stores "total pcs" entered by user
-        // qty (in Kg) = total_pcs * weight_per_piece (kg/piece)
-        const qty = total_weight * weight_per_piece;
-        frappe.model.set_value(cdt, cdn, 'qty', flt(qty, precision('qty', row)));
-    }
+    if (!total_pcs || !weight_per_piece) return;
+
+    // total_weight = "total pcs" entered by user
+    // qty (in Kg) = total_pcs * weight_per_piece (kg/piece)
+    const qty = total_pcs * weight_per_piece;
+    row._vbc_guard = true;
+    row._vbc_total_pcs = total_pcs;
+
+    frappe.model.set_value(cdt, cdn, 'qty', flt(qty, precision('qty', row)));
+
+    // ERPNext's calculate_taxes_and_totals recalculates total_weight
+    // asynchronously after qty changes. Force-restore the user's
+    // entered total_pcs value after ERPNext finishes.
+    setTimeout(() => {
+        const r = locals[cdt] && locals[cdt][cdn];
+        if (r && r._vbc_total_pcs) {
+            frappe.model.set_value(cdt, cdn, 'total_weight', r._vbc_total_pcs).then(() => {
+                if (r) r._vbc_guard = false;
+            });
+        } else {
+            if (r) r._vbc_guard = false;
+        }
+    }, 500);
 }
 
 function vbcMaybeResolveVariant(frm, cdt, cdn) {
@@ -158,7 +164,6 @@ function vbcMaybeResolveVariant(frm, cdt, cdn) {
     const template = row.template_item;
     if (!template) return;
 
-    // All three attributes must be set
     if (!row.powder_code || row.length == null || !row.sticker) {
         return;
     }
@@ -185,7 +190,6 @@ function vbcMaybeResolveVariant(frm, cdt, cdn) {
 
 frappe.ui.form.on('Sales Order', {
     setup(frm) {
-        // Template field query: only show template items
         frm.set_query('template_item', 'items', () => ({
             filters: {
                 has_variants: 1,
@@ -193,7 +197,6 @@ frappe.ui.form.on('Sales Order', {
             },
         }));
 
-        // Powder code and sticker attribute queries
         ['powder_code', 'sticker'].forEach((fieldname) => {
             frm.set_query(fieldname, 'items', (doc, cdt, cdn) => {
                 const row = locals[cdt][cdn];
@@ -224,7 +227,6 @@ frappe.ui.form.on('Sales Order Item', {
     template_item(frm, cdt, cdn) {
         const row = locals[cdt][cdn] || {};
 
-        // Clear attribute fields and variant selection when template changes
         frappe.model.set_value(cdt, cdn, {
             powder_code: null,
             sticker: null,
@@ -234,7 +236,6 @@ frappe.ui.form.on('Sales Order Item', {
 
         if (!row.template_item) return;
 
-        // Fetch and cache template attributes
         vbcFetchAndCacheAttributes(frm, row.template_item);
     },
 

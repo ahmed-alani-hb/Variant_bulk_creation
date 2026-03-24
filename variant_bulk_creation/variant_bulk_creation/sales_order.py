@@ -108,6 +108,33 @@ def _calculate_weight_for_variant(
     }
 
 
+def _update_variant_weight_and_image(variant_doc, template_item, weight_info):
+    """Set weight_per_unit and image on the variant Item so ERPNext copies them
+    to transaction rows automatically."""
+    needs_save = False
+    template_doc = frappe.get_doc("Item", template_item)
+
+    # Copy image from template if variant has no image
+    if template_doc.get("image") and not variant_doc.get("image"):
+        variant_doc.image = template_doc.image
+        needs_save = True
+
+    # Set weight_per_unit (pieces_per_kg) on the variant Item itself.
+    # When ERPNext fetches item details for a SO/DN row, it copies this value,
+    # so total_weight = weight_per_unit * qty = pieces_per_kg * qty_in_kg = total_pcs
+    if weight_info:
+        current_wpu = variant_doc.get("weight_per_unit") or 0
+        new_wpu = weight_info["weight_per_unit"]
+        if abs(current_wpu - new_wpu) > 0.0001:
+            variant_doc.weight_per_unit = new_wpu
+            variant_doc.weight_uom = weight_info["weight_uom"]
+            needs_save = True
+
+    if needs_save:
+        variant_doc.flags.ignore_permissions = True
+        variant_doc.save()
+
+
 def _materialise_variant(
     template_item: str,
     sticker: Optional[str] = None,
@@ -117,6 +144,7 @@ def _materialise_variant(
     """Return an Item document for the requested variant, creating it if needed.
 
     If the variant already exists, it is returned silently without any message.
+    Also copies template image and sets weight_per_unit on the variant.
     """
 
     if not all([sticker, powder_code, length is not None]):
@@ -174,22 +202,47 @@ def _materialise_variant(
             )
         )
 
+    # Calculate weight for this variant
+    numeric_length = length
+    if numeric_length is not None:
+        try:
+            numeric_length = float(numeric_length)
+        except (ValueError, TypeError):
+            numeric_length = None
+    weight_info = _calculate_weight_for_variant(template_item, numeric_length, sticker)
+
     # Try to find existing variant
     variant_name = get_variant(template_item, args)
     if variant_name:
-        return frappe.get_doc("Item", variant_name)
+        variant_doc = frappe.get_doc("Item", variant_name)
+        _update_variant_weight_and_image(variant_doc, template_item, weight_info)
+        return variant_doc
 
     # Create the variant doc (unsaved)
     variant_doc = create_variant(template_item, args)
     if isinstance(variant_doc, str):
-        return frappe.get_doc("Item", variant_doc)
+        variant_doc = frappe.get_doc("Item", variant_doc)
+        _update_variant_weight_and_image(variant_doc, template_item, weight_info)
+        return variant_doc
 
     # variant_doc.name is None until insert(); use item_code to check
     # if the variant already exists (get_variant may miss it due to
     # numeric formatting differences in attribute lookup)
     variant_item_code = variant_doc.item_code or variant_doc.item_name
     if variant_item_code and frappe.db.exists("Item", variant_item_code):
-        return frappe.get_doc("Item", variant_item_code)
+        variant_doc = frappe.get_doc("Item", variant_item_code)
+        _update_variant_weight_and_image(variant_doc, template_item, weight_info)
+        return variant_doc
+
+    # Copy image from template before insert
+    template_doc = frappe.get_doc("Item", template_item)
+    if template_doc.get("image"):
+        variant_doc.image = template_doc.image
+
+    # Set weight on the variant before insert
+    if weight_info:
+        variant_doc.weight_per_unit = weight_info["weight_per_unit"]
+        variant_doc.weight_uom = weight_info["weight_uom"]
 
     # Insert new variant, catch duplicate in case of race condition
     try:
@@ -197,9 +250,9 @@ def _materialise_variant(
         variant_doc.insert()
         variant_doc.reload()
     except frappe.DuplicateEntryError:
-        # Clear the error from the message log so no dialog is shown
         frappe.clear_last_message()
-        return frappe.get_doc("Item", variant_item_code)
+        variant_doc = frappe.get_doc("Item", variant_item_code)
+        _update_variant_weight_and_image(variant_doc, template_item, weight_info)
 
     return variant_doc
 
@@ -255,18 +308,25 @@ def ensure_sales_order_variants(doc, _event: Optional[str] = None) -> None:
         if hasattr(row, "conversion_factor") and not row.get("conversion_factor"):
             row.conversion_factor = 1
 
-        # Set weight_per_unit = pieces_per_kg so ERPNext recalculates
-        # total_weight correctly: total_weight = pieces_per_kg * qty
-        # This preserves the user-entered "total pcs" value in total_weight
-        weight_info = _calculate_weight_for_variant(template_item, length, sticker)
-        if weight_info:
-            row.weight_per_unit = weight_info["weight_per_unit"]
-            row.weight_uom = weight_info["weight_uom"]
+        # weight_per_unit is now set on the variant Item itself, so ERPNext
+        # copies it automatically. But also set it on the row for safety.
+        if variant_doc.get("weight_per_unit"):
+            row.weight_per_unit = variant_doc.weight_per_unit
+            row.weight_uom = variant_doc.get("weight_uom") or "Kg"
 
-            # If total_weight was entered (as total pcs), recalculate qty
-            total_weight = row.get("total_weight")
-            if total_weight:
-                row.qty = total_weight * weight_info["weight_per_piece"]
+        # If total_weight was entered (as total pcs), recalculate qty
+        total_weight = row.get("total_weight")
+        if total_weight and row.weight_per_unit:
+            weight_per_piece = 1 / row.weight_per_unit
+            row.qty = total_weight * weight_per_piece
+
+
+def _sales_order_before_print(doc, method=None, settings=None):
+    """Convert image paths to <img> tags for print rendering."""
+    for row in doc.get("items", []):
+        image = row.get("image")
+        if image and not image.startswith("<"):
+            row.image = '<img src="{0}" style="max-height:80px; max-width:120px;">'.format(image)
 
 
 @frappe.whitelist()
@@ -311,12 +371,13 @@ def resolve_sales_order_variant(
         "description": variant_doc.get("description"),
         "stock_uom": variant_doc.get("stock_uom"),
         "conversion_factor": 1,
+        "image": variant_doc.get("image"),
     }
 
-    # Include weight calculation for qty computation on the client
-    weight_info = _calculate_weight_for_variant(template_item, length, sticker)
-    if weight_info:
-        result["weight_per_unit"] = weight_info["weight_per_unit"]
-        result["weight_per_piece"] = weight_info["weight_per_piece"]
+    # weight_per_unit is now set on the variant Item itself
+    if variant_doc.get("weight_per_unit"):
+        result["weight_per_unit"] = variant_doc.weight_per_unit
+        weight_per_piece = 1 / variant_doc.weight_per_unit
+        result["weight_per_piece"] = weight_per_piece
 
     return result

@@ -327,6 +327,7 @@ def restore_total_pcs(doc, _event: Optional[str] = None) -> None:
     ERPNext's validate recalculates total_weight = weight_per_unit * stock_qty,
     overwriting the user's pcs entry. This before_save hook runs after validate
     and restores total_weight to the pcs value by reversing the calculation.
+    Round to 3 decimal places to avoid floating-point drift.
     It also recalculates total_net_weight as the sum of all pcs.
     """
     total_pcs_sum = 0
@@ -334,12 +335,13 @@ def restore_total_pcs(doc, _event: Optional[str] = None) -> None:
         if not row.weight_per_unit or not row.qty:
             continue
         # total_pcs = qty / weight_per_piece = qty * weight_per_unit
-        total_pcs = row.qty * row.weight_per_unit
+        # Round to avoid floating-point drift (e.g. 10 → 9.975)
+        total_pcs = round(row.qty * row.weight_per_unit, 3)
         row.total_weight = total_pcs
         total_pcs_sum += total_pcs
 
     if total_pcs_sum:
-        doc.total_net_weight = total_pcs_sum
+        doc.total_net_weight = round(total_pcs_sum, 3)
 
 
 def _sales_order_before_print(doc, method=None, settings=None):

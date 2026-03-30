@@ -7,7 +7,78 @@ const VBC_RESOLVE_VARIANT_METHOD =
 const VBC_ATTRIBUTE_QUERY =
     'variant_bulk_creation.variant_bulk_creation.doctype.variant_creation_tool.variant_creation_tool.search_attribute_values';
 
-/* ---------- template attribute cache ---------- */
+/* ---------- persistent total-pcs store ---------- */
+
+/**
+ * Store user-entered total_pcs values at form level so they survive
+ * ERPNext's calculate_taxes_and_totals() which recalculates total_weight
+ * for ALL rows (causing floating-point drift like 10 → 9.975).
+ */
+function vbcEnsurePcsStore(frm) {
+    if (!frm._vbc_pcs_store) frm._vbc_pcs_store = {};
+}
+
+function vbcStorePcs(frm, cdn, value) {
+    vbcEnsurePcsStore(frm);
+    frm._vbc_pcs_store[cdn] = value;
+}
+
+function vbcGetStoredPcs(frm, cdn) {
+    vbcEnsurePcsStore(frm);
+    return frm._vbc_pcs_store[cdn];
+}
+
+/**
+ * Restore all stored total_pcs values after ERPNext recalculation.
+ * Called after calculate_taxes_and_totals overwrites total_weight.
+ */
+function vbcRestoreAllPcs(frm) {
+    vbcEnsurePcsStore(frm);
+    let net_weight_sum = 0;
+    let any_restored = false;
+
+    (frm.doc.items || []).forEach((row) => {
+        const stored = frm._vbc_pcs_store[row.name];
+        if (stored != null && row.total_weight !== stored) {
+            row.total_weight = stored;
+            any_restored = true;
+        }
+        net_weight_sum += flt(row.total_weight);
+    });
+
+    if (any_restored) {
+        frm.doc.total_net_weight = net_weight_sum;
+        frm.refresh_fields();
+    }
+}
+
+/**
+ * Monkey-patch calculate_taxes_and_totals so we can restore pcs
+ * values after ERPNext finishes its recalculation.
+ */
+function vbcPatchCalculation(frm) {
+    if (frm._vbc_calc_patched) return;
+    frm._vbc_calc_patched = true;
+
+    const orig = frm.cscript.calculate_taxes_and_totals;
+    frm.cscript.calculate_taxes_and_totals = function() {
+        if (orig) orig.apply(this, arguments);
+        vbcRestoreAllPcs(frm);
+    };
+}
+
+/**
+ * On form load/refresh, initialise the pcs store from existing
+ * total_weight values (which were saved correctly by before_save hook).
+ */
+function vbcInitPcsStoreFromDoc(frm) {
+    vbcEnsurePcsStore(frm);
+    (frm.doc.items || []).forEach((row) => {
+        if (row.total_weight && !frm._vbc_pcs_store[row.name]) {
+            frm._vbc_pcs_store[row.name] = row.total_weight;
+        }
+    });
+}
 
 function vbcEnsureTemplateCache(frm) {
     frm._vbc_template_cache = frm._vbc_template_cache || {};
@@ -134,25 +205,29 @@ function vbcRecalcQtyFromTotalWeight(frm, cdt, cdn) {
 
     if (!total_pcs || !weight_per_piece) return;
 
+    // Store the exact value the user entered
+    vbcStorePcs(frm, cdn, total_pcs);
+
     // total_weight = "total pcs" entered by user
     // qty (in Kg) = total_pcs * weight_per_piece (kg/piece)
     const qty = total_pcs * weight_per_piece;
     row._vbc_guard = true;
-    row._vbc_total_pcs = total_pcs;
 
     frappe.model.set_value(cdt, cdn, 'qty', flt(qty, precision('qty', row)));
 
-    // ERPNext's calculate_taxes_and_totals recalculates total_weight
-    // asynchronously after qty changes. Force-restore the user's
-    // entered total_pcs value after ERPNext finishes.
+    // ERPNext recalculates total_weight asynchronously after qty changes.
+    // Force-restore the user's entered value after ERPNext finishes.
     setTimeout(() => {
         const r = locals[cdt] && locals[cdt][cdn];
-        if (r && r._vbc_total_pcs) {
-            frappe.model.set_value(cdt, cdn, 'total_weight', r._vbc_total_pcs).then(() => {
-                if (r) r._vbc_guard = false;
-            });
-        } else {
-            if (r) r._vbc_guard = false;
+        if (r) {
+            const stored = vbcGetStoredPcs(frm, cdn);
+            if (stored != null) {
+                frappe.model.set_value(cdt, cdn, 'total_weight', stored).then(() => {
+                    if (r) r._vbc_guard = false;
+                });
+            } else {
+                r._vbc_guard = false;
+            }
         }
     }, 500);
 }
@@ -190,6 +265,8 @@ function vbcMaybeResolveVariant(frm, cdt, cdn) {
 
 frappe.ui.form.on('Sales Order', {
     setup(frm) {
+        vbcPatchCalculation(frm);
+
         frm.set_query('template_item', 'items', () => ({
             filters: {
                 has_variants: 1,
@@ -218,6 +295,8 @@ frappe.ui.form.on('Sales Order', {
 
     refresh(frm) {
         vbcSetupGridColumns(frm);
+        vbcInitPcsStoreFromDoc(frm);
+        vbcPatchCalculation(frm);
     },
 });
 

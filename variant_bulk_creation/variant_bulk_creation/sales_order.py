@@ -321,27 +321,44 @@ def ensure_sales_order_variants(doc, _event: Optional[str] = None) -> None:
             row.qty = total_weight * weight_per_piece
 
 
-def restore_total_pcs(doc, _event: Optional[str] = None) -> None:
-    """Restore total_weight (pcs) after ERPNext recalculates it as actual weight.
+def stash_total_pcs(doc, _event: Optional[str] = None) -> None:
+    """Capture user-entered total_weight (pcs) values BEFORE ERPNext's
+    validate() overwrites them with weight_per_unit * stock_qty.
 
-    ERPNext's validate recalculates total_weight = weight_per_unit * stock_qty,
-    overwriting the user's pcs entry. This before_save hook runs after validate
-    and restores total_weight to the pcs value by reversing the calculation.
-    Round to 3 decimal places to avoid floating-point drift.
-    It also recalculates total_net_weight as the sum of all pcs.
+    Stored in doc.flags._vbc_pcs_values as {row_name: pcs_value}.
+    Used later by restore_total_pcs in before_save to restore the
+    exact values without floating-point drift.
     """
-    total_pcs_sum = 0
+    pcs_values = {}
     for row in doc.get("items", []):
-        if not row.weight_per_unit or not row.qty:
-            continue
-        # total_pcs = qty / weight_per_piece = qty * weight_per_unit
-        # Round to avoid floating-point drift (e.g. 10 → 9.975)
-        total_pcs = round(row.qty * row.weight_per_unit, 3)
-        row.total_weight = total_pcs
-        total_pcs_sum += total_pcs
+        if row.get("total_weight"):
+            pcs_values[row.name] = row.total_weight
+    doc.flags._vbc_pcs_values = pcs_values
+
+
+def restore_total_pcs(doc, _event: Optional[str] = None) -> None:
+    """Restore total_weight (pcs) from the values captured by stash_total_pcs
+    before ERPNext's validate overwrote them.
+
+    This preserves the exact user-entered values without any floating-point
+    drift from qty * weight_per_unit recalculation.
+    """
+    stashed = getattr(doc.flags, "_vbc_pcs_values", None) or {}
+    total_pcs_sum = 0
+
+    for row in doc.get("items", []):
+        stored = stashed.get(row.name)
+        if stored is not None:
+            row.total_weight = stored
+            total_pcs_sum += stored
+        elif row.weight_per_unit and row.qty:
+            # New row added after stash; recalculate from qty
+            total_pcs = round(row.qty * row.weight_per_unit, 3)
+            row.total_weight = total_pcs
+            total_pcs_sum += total_pcs
 
     if total_pcs_sum:
-        doc.total_net_weight = round(total_pcs_sum, 3)
+        doc.total_net_weight = total_pcs_sum
 
 
 def _sales_order_before_print(doc, method=None, settings=None):

@@ -30,6 +30,7 @@ doctype_js = {
 
 doc_events = {
     "Sales Order": {
+        "before_validate": "variant_bulk_creation.variant_bulk_creation.sales_order.stash_total_pcs",
         "validate": "variant_bulk_creation.variant_bulk_creation.sales_order.ensure_sales_order_variants",
         "before_save": "variant_bulk_creation.variant_bulk_creation.sales_order.restore_total_pcs",
     },

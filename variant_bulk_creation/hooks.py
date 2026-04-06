@@ -33,6 +33,9 @@ doc_events = {
         "before_validate": "variant_bulk_creation.variant_bulk_creation.sales_order.stash_total_pcs",
         "validate": "variant_bulk_creation.variant_bulk_creation.sales_order.ensure_sales_order_variants",
         "before_save": "variant_bulk_creation.variant_bulk_creation.sales_order.restore_total_pcs",
+        "before_submit": "variant_bulk_creation.variant_bulk_creation.sales_order.restore_total_pcs",
+        "on_submit": "variant_bulk_creation.variant_bulk_creation.sales_order.restore_total_pcs_and_save",
+        "on_update_after_submit": "variant_bulk_creation.variant_bulk_creation.sales_order.restore_total_pcs_and_save",
     },
     "Work Order": {
         "before_save": "variant_bulk_creation.variant_bulk_creation.work_order.populate_total_pcs_from_sales_order",

@@ -361,6 +361,30 @@ def restore_total_pcs(doc, _event: Optional[str] = None) -> None:
         doc.total_net_weight = total_pcs_sum
 
 
+def restore_total_pcs_and_save(doc, _event: Optional[str] = None) -> None:
+    """Restore total_weight after submit/amend and write directly to DB.
+
+    After submit, ERPNext may recalculate total_weight one more time.
+    This hook re-reads from the stash (or rounds from qty), updates the
+    rows in the database directly to ensure the saved values are exact.
+    """
+    stash_total_pcs(doc)
+    restore_total_pcs(doc)
+
+    for row in doc.get("items", []):
+        frappe.db.set_value(
+            "Sales Order Item", row.name,
+            "total_weight", row.total_weight,
+            update_modified=False
+        )
+
+    frappe.db.set_value(
+        "Sales Order", doc.name,
+        "total_net_weight", doc.total_net_weight,
+        update_modified=False
+    )
+
+
 def _sales_order_before_print(doc, method=None, settings=None):
     """Convert image paths to <img> tags for print rendering.
 

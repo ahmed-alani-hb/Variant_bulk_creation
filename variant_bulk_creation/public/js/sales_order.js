@@ -274,16 +274,26 @@ frappe.ui.form.on('Sales Order', {
             },
         }));
 
+        // Powder code and sticker: ALWAYS use custom query to avoid
+        // Frappe's standard link query which fails on child doctypes
+        // ("Item Attribute Value is not a valid parent DocType")
         ['powder_code', 'sticker'].forEach((fieldname) => {
             frm.set_query(fieldname, 'items', (doc, cdt, cdn) => {
                 const row = locals[cdt][cdn];
-                if (!row || !row.template_item) return {};
+                if (!row || !row.template_item) {
+                    // Return impossible filter to prevent standard query
+                    return { filters: { name: 'NONE' } };
+                }
 
                 const attributes = vbcGetTemplateAttributes(frm, row.template_item);
-                if (!attributes || !attributes.length) return {};
+                if (!attributes || !attributes.length) {
+                    return { filters: { name: 'NONE' } };
+                }
 
                 const attr = attributes.find((a) => vbcMatchFieldForAttribute(a) === fieldname);
-                if (!attr) return {};
+                if (!attr) {
+                    return { filters: { name: 'NONE' } };
+                }
 
                 return {
                     query: VBC_ATTRIBUTE_QUERY,
